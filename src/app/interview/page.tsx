@@ -16,6 +16,7 @@ export default function InterviewPage() {
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (pcRef.current) pcRef.current.close();
@@ -52,6 +53,7 @@ export default function InterviewPage() {
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
 
+      // Audio element for playback
       const audioEl = document.createElement('audio');
       audioEl.autoplay = true;
       audioRef.current = audioEl;
@@ -60,9 +62,11 @@ export default function InterviewPage() {
         audioEl.srcObject = e.streams[0];
       };
 
+      // Get mic
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       pc.addTrack(stream.getTracks()[0]);
 
+      // Data channel for control events
       const dc = pc.createDataChannel('oai-events');
       dcRef.current = dc;
 
@@ -71,7 +75,7 @@ export default function InterviewPage() {
         setIsActive(true);
         setIsConnecting(false);
 
-        // MINIMAL SETTINGS → Agent Builder now drives full instructions
+        // Minimal settings: Agent Builder holds full instructions
         const sessionUpdate = {
           type: 'session.update',
           session: {
@@ -83,6 +87,7 @@ export default function InterviewPage() {
 
         dc.send(JSON.stringify(sessionUpdate));
 
+        // Kick off the agent's first response
         setTimeout(() => {
           dc.send(JSON.stringify({ type: 'response.create' }));
         }, 100);
@@ -111,6 +116,7 @@ export default function InterviewPage() {
         }
       });
 
+      // WebRTC offer/answer with the Realtime endpoint
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
@@ -152,17 +158,20 @@ export default function InterviewPage() {
     setProgress(0);
   };
 
+  // Landing screen before interview starts
   if (!isActive && aiMessages.length === 0) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-white px-4">
         <div className="text-center p-12 bg-white rounded-3xl shadow-2xl max-w-4xl">
           <h1 className="text-3xl font-bold text-gray-800 mb-6">
-            Welcome to the Engaging Workplace Wellbeing Interview Experience!
+            Welcome to the Engaging Workplace Well-Being Interview Experience!
           </h1>
 
           <p className="text-gray-600 mb-6">
-            When you start, Clarity will guide you through a series of questions designed to assess
-            workplace wellbeing, safety, purpose, support, work-life balance, and more.
+            When you start, Clarity will guide you through questions about job satisfaction,
+            workload, workplace support, psychological safety, work–life balance, and overall
+            well-being. Your responses are confidential and will be combined with others to support
+            workplace improvement.
           </p>
 
           {error && (
@@ -181,6 +190,7 @@ export default function InterviewPage() {
     );
   }
 
+  // Active interview screen
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-start p-8">
       <div className="relative mb-8 mt-16">
@@ -260,7 +270,8 @@ export default function InterviewPage() {
         }
 
         @keyframes pulse-strong {
-          0%, 100% {
+          0%,
+          100% {
             opacity: 1;
             transform: scale(1);
           }
