@@ -14,7 +14,7 @@ export async function POST() {
   try {
     // Create an ephemeral client secret for the Realtime API
     const response = await fetch(
-      'https://api.openai.com/v1/realtime/client_secrets',
+      'https://api.openai.com/v1/realtime/sessions',
       {
         method: 'POST',
         headers: {
@@ -22,17 +22,13 @@ export async function POST() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          // Optional: how long the client secret is valid (seconds)
-          expires_in: 3600,
-          session: {
-            model: 'gpt-4o-realtime-preview-2024-12-17',
-            voice: 'alloy',
-            input_audio_transcription: {
-              model: 'whisper-1',
-            },
-            turn_detection: {
-              type: 'server_vad',
-            },
+          model: 'gpt-4o-realtime-preview-2024-12-17',
+          voice: 'alloy',
+          input_audio_transcription: {
+            model: 'whisper-1',
+          },
+          turn_detection: {
+            type: 'server_vad',
           },
         }),
       }
@@ -40,8 +36,12 @@ export async function POST() {
 
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      console.error('Failed to create client secret:', response.status, text);
-      throw new Error('Failed to create client secret');
+      console.error(
+        'Failed to create realtime session:',
+        response.status,
+        text
+      );
+      throw new Error('Failed to create realtime session');
     }
 
     const data = await response.json();
