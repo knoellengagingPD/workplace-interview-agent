@@ -11,7 +11,7 @@ export default function InterviewPage() {
     // TODO: Connect to OpenAI Realtime API
     // Simulate the agent asking a question
     setTimeout(() => {
-      setTranscript(['Great! Could you please tell me your role at the school? Are you a student, teacher, non-instructional staff, or administrator?']);
+      setTranscript(['Great! Could you please tell me your role at your workplace?']);
     }, 1000);
   };
 
@@ -71,7 +71,7 @@ export default function InterviewPage() {
           {/* Follow-up question */}
           <div className="animate-fade-in-up-delayed">
             <p className="text-xl text-gray-700 text-center leading-relaxed">
-              Thanks! And could you please provide your school ID number for verification?
+              Thanks! And could you please provide your ID number for verification?
             </p>
           </div>
         </div>
