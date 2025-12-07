@@ -5,7 +5,8 @@ import { useRef, useState } from 'react';
 async function startRealtimeSession() {
   const response = await fetch('/api/realtime-session', { method: 'POST' });
   const data = await response.json();
-  return data.client_secret.value;
+  console.log('API response:', data);
+  return data.clientSecret;
 }
 
 export default function InterviewPage() {
@@ -21,6 +22,7 @@ export default function InterviewPage() {
     
     try {
       const ephemeralKey = await startRealtimeSession();
+      console.log('Got ephemeral key:', ephemeralKey);
       
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
@@ -29,10 +31,12 @@ export default function InterviewPage() {
       if (!audioEl) throw new Error('Audio element not found');
 
       pc.ontrack = (e) => {
+        console.log('Audio track received:', e);
         audioEl.srcObject = e.streams[0];
       };
 
       const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('Got user media:', ms);
       pc.addTrack(ms.getTracks()[0]);
 
       const dc = pc.createDataChannel('oai-events');
@@ -282,24 +286,33 @@ Important behavior rules:
           },
         };
 
+        console.log('Sending session update:', sessionUpdate);
         dc.send(JSON.stringify(sessionUpdate));
 
         setTimeout(() => {
+          console.log('Sending response.create');
           dc.send(JSON.stringify({ type: 'response.create' }));
         }, 500);
       });
 
       dc.addEventListener('message', async (e) => {
         const data = JSON.parse(e.data);
+        console.log('📨 Received message:', data.type, data);
         
         if (data.type === 'conversation.item.input_audio_transcription.completed') {
           const transcript = data.transcript;
+          console.log('👤 User said:', transcript);
           await logTranscript('user', transcript);
         }
         
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
+          console.log('🤖 Clarity said:', transcript);
           await logTranscript('clarity', transcript);
+        }
+
+        if (data.type === 'error') {
+          console.error('❌ Error from OpenAI:', data);
         }
       });
 
@@ -309,6 +322,7 @@ Important behavior rules:
       const baseUrl = 'https://api.openai.com/v1/realtime';
       const model = 'gpt-4o-realtime-preview-2024-12-17';
 
+      console.log('Sending SDP offer to OpenAI...');
       const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
         method: 'POST',
         body: offer.sdp,
@@ -318,11 +332,13 @@ Important behavior rules:
         },
       });
 
+      console.log('SDP response status:', sdpResponse.status);
       const answer = {
         type: 'answer' as RTCSdpType,
         sdp: await sdpResponse.text(),
       };
       await pc.setRemoteDescription(answer);
+      console.log('Remote description set successfully');
 
     } catch (error) {
       console.error('Error starting interview:', error);
