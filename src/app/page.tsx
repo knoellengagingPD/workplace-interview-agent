@@ -6,7 +6,7 @@ async function startRealtimeSession() {
   const response = await fetch('/api/realtime-session', { method: 'POST' });
   const data = await response.json();
   console.log('API response:', data);
-  return data.client_secret?.value || data.client_secret;
+  return data.clientSecret;
 }
 
 export default function InterviewPage() {
