@@ -1,12 +1,47 @@
-dc.addEventListener('open', () => {
-  console.log('Data channel opened');
-  setIsActive(true);
-  setIsConnecting(false);
+'use client';
 
-  const sessionUpdate = {
-    type: 'session.update',
-    session: {
-      instructions: `You are Clarity, a calm and professional workplace well-being interviewer, conducting confidential interviews for workplace improvement.
+import { useEffect, useRef, useState } from 'react';
+import { startRealtimeSession } from '../api/realtime-session/client';
+
+export default function InterviewPage() {
+  const [isActive, setIsActive] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const dcRef = useRef<RTCDataChannel | null>(null);
+  const sessionIdRef = useRef<string>(`session-${Date.now()}`);
+
+  const startInterview = async () => {
+    setIsConnecting(true);
+    
+    try {
+      const ephemeralKey = await startRealtimeSession();
+      
+      const pc = new RTCPeerConnection();
+      pcRef.current = pc;
+
+      const audioEl = audioRef.current;
+      if (!audioEl) throw new Error('Audio element not found');
+
+      pc.ontrack = (e) => {
+        audioEl.srcObject = e.streams[0];
+      };
+
+      const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
+      pc.addTrack(ms.getTracks()[0]);
+
+      const dc = pc.createDataChannel('oai-events');
+      dcRef.current = dc;
+
+      dc.addEventListener('open', () => {
+        console.log('Data channel opened');
+        setIsActive(true);
+        setIsConnecting(false);
+
+        const sessionUpdate = {
+          type: 'session.update',
+          session: {
+            instructions: `You are Clarity, a calm and professional workplace well-being interviewer, conducting confidential interviews for workplace improvement.
 
 CRITICAL: You MUST start the conversation with this exact greeting, word-for-word:
 "Hi! I'm Clarity, your workplace well-being interviewer. I'll start by asking for your role at your workplace and then I'll guide you through a series of questions, along with follow-up questions so you can explain your answers. We'll end with a few questions where you can dream big about what would make your workplace even better. Your responses are completely confidential and won't be shared with anyone at your workplace—they'll be combined with responses from others to help improve your work experience. Let's get started! First, what is your role at this workplace?"
@@ -236,15 +271,237 @@ Important behavior rules:
 - When participants respond, capture both the number and text (e.g., "3 - Somewhat satisfied").
 - Keep the conversation moving at a brisk pace, but be respectful and supportive.
 - START the conversation immediately with your greeting when the interview begins.`,
-      voice: 'alloy',
-      input_audio_transcription: { model: 'whisper-1' },
-      turn_detection: { type: 'server_vad' },
-    },
+            voice: 'alloy',
+            input_audio_transcription: { model: 'whisper-1' },
+            turn_detection: { type: 'server_vad' },
+          },
+        };
+
+        dc.send(JSON.stringify(sessionUpdate));
+
+        setTimeout(() => {
+          dc.send(JSON.stringify({ type: 'response.create' }));
+        }, 500);
+      });
+
+      dc.addEventListener('message', async (e) => {
+        const data = JSON.parse(e.data);
+        
+        if (data.type === 'conversation.item.input_audio_transcription.completed') {
+          const transcript = data.transcript;
+          await logTranscript('user', transcript);
+        }
+        
+        if (data.type === 'response.audio_transcript.done') {
+          const transcript = data.transcript;
+          await logTranscript('clarity', transcript);
+        }
+      });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const baseUrl = 'https://api.openai.com/v1/realtime';
+      const model = 'gpt-4o-realtime-preview-2024-12-17';
+
+      const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+        method: 'POST',
+        body: offer.sdp,
+        headers: {
+          Authorization: `Bearer ${ephemeralKey}`,
+          'Content-Type': 'application/sdp',
+        },
+      });
+
+      const answer = {
+        type: 'answer' as RTCSdpType,
+        sdp: await sdpResponse.text(),
+      };
+      await pc.setRemoteDescription(answer);
+
+    } catch (error) {
+      console.error('Error starting interview:', error);
+      setIsConnecting(false);
+    }
   };
 
-  dc.send(JSON.stringify(sessionUpdate));
+  const logTranscript = async (speaker: string, transcript: string) => {
+    try {
+      await fetch('/api/log-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          sessionId: sessionIdRef.current,
+          speaker,
+          transcript,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to log transcript:', error);
+    }
+  };
 
-  setTimeout(() => {
-    dc.send(JSON.stringify({ type: 'response.create' }));
-  }, 500);
-});
+  const stopInterview = () => {
+    if (dcRef.current) {
+      dcRef.current.close();
+    }
+    if (pcRef.current) {
+      pcRef.current.close();
+    }
+    if (audioRef.current) {
+      audioRef.current.srcObject = null;
+    }
+    setIsActive(false);
+  };
+
+  return (
+    <div style={{ 
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '20px',
+        padding: '60px 40px',
+        maxWidth: '500px',
+        width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        textAlign: 'center'
+      }}>
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: '700',
+          marginBottom: '20px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+        }}>
+          Welcome to the<br />Engaging Workplace<br />Well-Being Interview Experience!
+        </h1>
+        
+        <p style={{
+          fontSize: '16px',
+          color: '#666',
+          marginBottom: '40px',
+          lineHeight: '1.6'
+        }}>
+          When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will be combined with others to support workplace improvement.
+        </p>
+
+        {!isActive && !isConnecting && (
+          <button
+            onClick={startInterview}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50px',
+              padding: '18px 48px',
+              fontSize: '18px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              boxShadow: '0 10px 30px rgba(102, 126, 234, 0.4)',
+              transition: 'all 0.3s ease',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 15px 40px rgba(102, 126, 234, 0.5)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 10px 30px rgba(102, 126, 234, 0.4)';
+            }}
+          >
+            Start Interview
+          </button>
+        )}
+
+        {isConnecting && (
+          <div style={{
+            fontSize: '18px',
+            color: '#667eea',
+            fontWeight: '600'
+          }}>
+            Connecting...
+          </div>
+        )}
+
+        {isActive && (
+          <div>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              margin: '0 auto 30px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: 'pulse 2s ease-in-out infinite',
+            }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'white',
+              }} />
+            </div>
+            
+            <p style={{
+              fontSize: '18px',
+              color: '#667eea',
+              marginBottom: '30px',
+              fontWeight: '600'
+            }}>
+              Interview in progress...
+            </p>
+            
+            <button
+              onClick={stopInterview}
+              style={{
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50px',
+                padding: '14px 40px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = '#dc2626';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = '#ef4444';
+              }}
+            >
+              Stop Interview
+            </button>
+          </div>
+        )}
+
+        <audio ref={audioRef} autoPlay />
+      </div>
+
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.05);
+            opacity: 0.8;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
