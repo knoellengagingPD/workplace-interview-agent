@@ -1,7 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { startRealtimeSession } from '../api/realtime-session/client';
+import { useRef, useState } from 'react';
+
+async function startRealtimeSession() {
+  const response = await fetch('/api/realtime-session', { method: 'POST' });
+  const data = await response.json();
+  return data.client_secret.value;
+}
 
 export default function InterviewPage() {
   const [isActive, setIsActive] = useState(false);
