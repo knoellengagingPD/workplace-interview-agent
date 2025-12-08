@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
         statusText: response.statusText,
         error: errorText
       });
+      // Fixed syntax error here - was: throw new Error`...`
       throw new Error(`Cloud Run returned ${response.status}: ${errorText}`);
     }
 
