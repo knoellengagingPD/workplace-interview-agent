@@ -370,10 +370,11 @@ Important behavior rules:
           // Track progress based on keywords in Clarity's speech
           if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
             setProgress(prev => Math.max(prev, 23));
-          } else if (transcript.match(/^Question \d+\./i) || transcript.match(/Now for Question \d+/i)) {
-            const match = transcript.match(/Question (\d+)/i);
-            if (match) {
-              const questionNum = parseInt(match[1]);
+          } else {
+            // Only track if the transcript starts with "Question X." pattern
+            const questionMatch = transcript.match(/^Question (\d+)\./);
+            if (questionMatch) {
+              const questionNum = parseInt(questionMatch[1]);
               if (questionNum >= 1 && questionNum <= 23) {
                 setProgress(questionNum);
               }
@@ -511,7 +512,7 @@ Important behavior rules:
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}>
-            Welcome to the<br />Engaging Workplace<br />Well-Being Interview Experience!
+            Welcome to the Engaging Workplace<br />Well-Being Interview Experience!
           </h1>
           
           <p style={{
@@ -520,7 +521,7 @@ Important behavior rules:
             marginBottom: '40px',
             lineHeight: '1.6'
           }}>
-            When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will be combined with others to support workplace improvement.
+            When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will not be shared with anyone in your workplace. They will instead be combined with others to support workplace improvement.
           </p>
 
           {!isActive && !isConnecting && (
@@ -620,8 +621,8 @@ Important behavior rules:
                   onClick={togglePause}
                   style={{
                     background: 'white',
-                    color: '#f59e0b',
-                    border: '2px solid #f59e0b',
+                    color: '#3b82f6',
+                    border: '2px solid #3b82f6',
                     borderRadius: '50px',
                     padding: '14px 40px',
                     fontSize: '16px',
@@ -630,7 +631,7 @@ Important behavior rules:
                     transition: 'all 0.3s ease',
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#fef3c7';
+                    e.currentTarget.style.background = '#dbeafe';
                   }}
                   onMouseOut={(e) => {
                     e.currentTarget.style.background = 'white';
@@ -643,8 +644,8 @@ Important behavior rules:
                   onClick={stopInterview}
                   style={{
                     background: 'white',
-                    color: '#ef4444',
-                    border: '2px solid #ef4444',
+                    color: '#1e40af',
+                    border: '2px solid #1e40af',
                     borderRadius: '50px',
                     padding: '14px 40px',
                     fontSize: '16px',
@@ -653,7 +654,7 @@ Important behavior rules:
                     transition: 'all 0.3s ease',
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#fee2e2';
+                    e.currentTarget.style.background = '#dbeafe';
                   }}
                   onMouseOut={(e) => {
                     e.currentTarget.style.background = 'white';
@@ -700,17 +701,17 @@ Important behavior rules:
             </div>
           )}
           
-          {/* Previous transcripts - most recent is also blue and bold, others fade to grey */}
+          {/* Previous transcripts - all fade to grey progressively */}
           {transcripts.map((item, idx) => (
             <div
               key={idx}
               style={{
-                color: idx === 0 ? '#3b82f6' : '#999',
-                fontSize: idx === 0 ? '18px' : '15px',
-                fontWeight: idx === 0 ? '600' : '400',
+                color: '#999',
+                fontSize: '15px',
+                fontWeight: '400',
                 marginBottom: '10px',
                 lineHeight: '1.5',
-                opacity: idx === 0 ? 1 : Math.max(0.4, 1 - (idx * 0.15)),
+                opacity: Math.max(0.4, 1 - (idx * 0.15)),
                 transition: 'all 0.3s ease'
               }}
             >
