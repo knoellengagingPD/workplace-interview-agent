@@ -472,11 +472,15 @@ Important behavior rules:
     if (!audioEl) return;
 
     if (isPaused) {
-      audioEl.play();
+      // Resume audio
+      audioEl.muted = false;
       setIsPaused(false);
+      console.log('▶ Audio resumed');
     } else {
-      audioEl.pause();
+      // Pause audio by muting
+      audioEl.muted = true;
       setIsPaused(true);
+      console.log('⏸ Audio paused (muted)');
     }
   };
 
