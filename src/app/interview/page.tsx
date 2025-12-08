@@ -16,6 +16,7 @@ export default function InterviewPage() {
   const [progress, setProgress] = useState(0); // 0-28 questions (23 main + 5 dream big)
   const [transcripts, setTranscripts] = useState<Array<{text: string, timestamp: number, isComplete: boolean}>>([]);
   const [currentText, setCurrentText] = useState('');
+  const [pendingTranscript, setPendingTranscript] = useState(''); // Store complete transcript
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -357,25 +358,25 @@ Important behavior rules:
           setCurrentText(prev => prev + delta);
         }
         
-        // When text transcription is complete, log it but keep it blue (audio still playing)
+        // When text transcription is complete, store it and log it
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
           console.log('🤖 Clarity said (transcript done):', transcript);
+          setPendingTranscript(transcript); // Store for when audio finishes
           await logTranscript('clarity', transcript);
         }
         
-        // When the entire response is done (audio finished playing), move text to grey
-        if (data.type === 'response.done') {
-          console.log('✅ Response complete - moving text to grey');
-          // Move current blue text to grey history
-          if (currentText) {
-            setTranscripts(prev => [{ text: currentText, timestamp: Date.now(), isComplete: true }, ...prev]);
+        // When audio finishes playing, move text to grey
+        if (data.type === 'response.audio.done') {
+          console.log('🔊 Audio playback complete - moving text to grey');
+          if (pendingTranscript) {
+            setTranscripts(prev => [{ text: pendingTranscript, timestamp: Date.now(), isComplete: true }, ...prev]);
             
             // Track progress based on the completed text
-            if (currentText.includes('Dream Big') || currentText.includes('dream big')) {
+            if (pendingTranscript.includes('Dream Big') || pendingTranscript.includes('dream big')) {
               setProgress(prev => Math.max(prev, 23));
             } else {
-              const questionMatch = currentText.match(/^Question (\d+)\./);
+              const questionMatch = pendingTranscript.match(/^Question (\d+)\./);
               if (questionMatch) {
                 const questionNum = parseInt(questionMatch[1]);
                 if (questionNum >= 1 && questionNum <= 23) {
@@ -384,15 +385,18 @@ Important behavior rules:
               }
             }
             
+            setPendingTranscript('');
             setCurrentText('');
           }
         }
         
-        // Fallback: if response.audio.done fires, also trigger the grey transition
-        if (data.type === 'response.audio.done') {
-          console.log('✅ Audio complete - moving text to grey (fallback)');
-          if (currentText) {
-            setTranscripts(prev => [{ text: currentText, timestamp: Date.now(), isComplete: true }, ...prev]);
+        // Fallback: when entire response is done
+        if (data.type === 'response.done') {
+          console.log('✅ Response complete');
+          if (pendingTranscript || currentText) {
+            const textToMove = pendingTranscript || currentText;
+            setTranscripts(prev => [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev]);
+            setPendingTranscript('');
             setCurrentText('');
           }
         }
@@ -488,6 +492,7 @@ Important behavior rules:
     setIsActive(false);
     setTranscripts([]);
     setCurrentText('');
+    setPendingTranscript('');
     setProgress(0);
   };
 
