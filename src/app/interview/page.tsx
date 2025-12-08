@@ -120,35 +120,35 @@ IMPORTANT: When recording responses, always include both the numeric value and t
 
 Work Demands and Rewards (5 questions):
 
-Q1. "Overall, I am ____ with my job."
+Question 1. "Overall, I am blank with my job."
 Response scale:
 1 - Not at all satisfied
 2 - Not too satisfied
 3 - Somewhat satisfied
 4 - Very satisfied
 
-Q2. "I am given a lot of freedom to decide how to do my own work."
+Question 2. "I am given a lot of freedom to decide how to do my own work."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Q3. "I never seem to have enough time to get everything done on my job."
+Question 3. "I never seem to have enough time to get everything done on my job."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Q4. "The work I do is meaningful to me."
+Question 4. "The work I do is meaningful to me."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Q5. "My work inspires me."
+Question 5. "My work inspires me."
 Response scale:
 1 - Never
 2 - Almost never (a few times a year or less)
@@ -160,35 +160,35 @@ Response scale:
 
 Organizational Support and the Work Environment (6 questions):
 
-Q6. "At my organization, I am treated with respect."
+Question 6. "At my organization, I am treated with respect."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Q7. "My organization is willing to extend resources in order to help me perform my job to the best of my ability."
+Question 7. "My organization is willing to extend resources in order to help me perform my job to the best of my ability."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Q8. "My organization is committed to employee health and well-being."
+Question 8. "My organization is committed to employee health and well-being."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Q9. "Overall, how safe do you think your workplace is?"
+Question 9. "Overall, how safe do you think your workplace is?"
 Response scale:
 1 - Very unsafe
 2 - Somewhat unsafe
 3 - Somewhat safe
 4 - Very safe
 
-Q10. "Management reacts quickly to solve the problem when told about safety hazards."
+Question 10. "Management reacts quickly to solve the problem when told about safety hazards."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
@@ -196,7 +196,7 @@ Response scale:
 4 - Strongly agree
 0 - Does not apply
 
-Q11. "How satisfied are you with the environmental conditions at your workplace (heating, lighting, ventilation, etc.)?"
+Question 11. "How satisfied are you with the environmental conditions at your workplace (heating, lighting, ventilation, etc.)?"
 Response scale:
 1 - Very dissatisfied
 2 - Somewhat dissatisfied
@@ -205,7 +205,7 @@ Response scale:
 
 Work-Life Balance and Flexibility (3 questions):
 
-Q12. "How often do the demands of your job interfere with your personal life?"
+Question 12. "How often do the demands of your job interfere with your personal life?"
 Response scale:
 1 - Never
 2 - Almost never (a few times a year or less)
@@ -215,7 +215,7 @@ Response scale:
 6 - Very often (a few times a week)
 7 - Always (every day)
 
-Q13. "How often do the demands of your personal life interfere with your work on the job?"
+Question 13. "How often do the demands of your personal life interfere with your work on the job?"
 Response scale:
 1 - Never
 2 - Almost never (a few times a year or less)
@@ -225,7 +225,7 @@ Response scale:
 6 - Very often (a few times a week)
 7 - Always (every day)
 
-Q14. "I have the freedom to vary my work schedule."
+Question 14. "I have the freedom to vary my work schedule."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
@@ -234,7 +234,7 @@ Response scale:
 
 Workers' Physical, Psychological, and Occupational Health (6 questions):
 
-Q15. "Would you say that in general, your health is poor, fair, good, very good, or excellent?"
+Question 15. "Would you say that in general, your health is poor, fair, good, very good, or excellent?"
 Response scale:
 1 - Poor
 2 - Fair
@@ -242,10 +242,10 @@ Response scale:
 4 - Very good
 5 - Excellent
 
-Q16. "Now, thinking about your mental health, which includes stress, depression, anxiety, and problems with emotions, during the past 30 days, for how many days was your mental health not good?"
+Question 16. "Now, thinking about your mental health, which includes stress, depression, anxiety, and problems with emotions, during the past 30 days, for how many days was your mental health not good?"
 Response: Please answer with a number of days from 0 to 30.
 
-Q17. "How often do you experience stress with regard to your work?"
+Question 17. "How often do you experience stress with regard to your work?"
 Response scale:
 1 - Never
 2 - Almost never (a few times a year or less)
@@ -255,38 +255,38 @@ Response scale:
 6 - Very often (a few times a week)
 7 - Always (every day)
 
-Q18. "Over the last 2 weeks, how often have you been bothered by feeling down, depressed, or hopeless?"
+Question 18. "Over the last 2 weeks, how often have you been bothered by feeling down, depressed, or hopeless?"
 Response scale:
 1 - Not at all
 2 - Several days
 3 - More than half the days
 4 - Nearly every day
 
-Q19. "Over the last 2 weeks, how often have you been bothered by feeling nervous, anxious, or on edge?"
+Question 19. "Over the last 2 weeks, how often have you been bothered by feeling nervous, anxious, or on edge?"
 Response scale:
 1 - Not at all
 2 - Several days
 3 - More than half the days
 4 - Nearly every day
 
-Q20. "In a typical week, how many days do you get at least 20 minutes of high intensity physical activity? High intensity activity lasts at least 10 minutes and increases your heart rate, makes you sweat, and may make you feel out of breath; examples are running, fast cycling, and strenuous, continuous lifting of heavy objects."
+Question 20. "In a typical week, how many days do you get at least 20 minutes of high intensity physical activity? High intensity activity lasts at least 10 minutes and increases your heart rate, makes you sweat, and may make you feel out of breath; examples are running, fast cycling, and strenuous, continuous lifting of heavy objects."
 Response: Please answer with a number of days from 0 to 7.
 
 Discrimination, Harassment, and Violence (3 questions):
 
-Q21. "I feel discriminated against in my job because of my gender."
+Question 21. "I feel discriminated against in my job because of my gender."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Q22. "In the past 12 months, were you sexually harassed by anyone while you were on the job?"
+Question 22. "In the past 12 months, were you sexually harassed by anyone while you were on the job?"
 Response scale:
 1 - Yes
 0 - No
 
-Q23. "In the past 12 months, were you bullied, threatened, or harassed in any other way by anyone while you were on the job?"
+Question 23. "In the past 12 months, were you bullied, threatened, or harassed in any other way by anyone while you were on the job?"
 Response scale:
 1 - Yes
 0 - No
@@ -370,11 +370,13 @@ Important behavior rules:
           // Track progress based on keywords in Clarity's speech
           if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
             setProgress(prev => Math.max(prev, 23));
-          } else if (transcript.match(/Q\d+\.|question \d+/i)) {
-            const match = transcript.match(/Q(\d+)|question (\d+)/i);
+          } else if (transcript.match(/^Question \d+\./i) || transcript.match(/Now for Question \d+/i)) {
+            const match = transcript.match(/Question (\d+)/i);
             if (match) {
-              const questionNum = parseInt(match[1] || match[2]);
-              setProgress(questionNum);
+              const questionNum = parseInt(match[1]);
+              if (questionNum >= 1 && questionNum <= 23) {
+                setProgress(questionNum);
+              }
             }
           }
         }
@@ -683,7 +685,7 @@ Important behavior rules:
           padding: '20px 25px',
           boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
         }}>
-          {/* Current streaming text - appears first */}
+          {/* Current streaming text - blue and bold while streaming */}
           {currentText && (
             <div
               style={{
@@ -691,25 +693,25 @@ Important behavior rules:
                 fontSize: '18px',
                 fontWeight: '600',
                 marginBottom: '12px',
-                lineHeight: '1.6',
-                animation: 'fadeIn 0.3s ease-in'
+                lineHeight: '1.6'
               }}
             >
               {currentText}
             </div>
           )}
           
-          {/* Previous transcripts - below current */}
+          {/* Previous transcripts - most recent is also blue and bold, others fade to grey */}
           {transcripts.map((item, idx) => (
             <div
               key={idx}
               style={{
-                color: '#999',
-                fontSize: '15px',
-                fontWeight: '400',
+                color: idx === 0 ? '#3b82f6' : '#999',
+                fontSize: idx === 0 ? '18px' : '15px',
+                fontWeight: idx === 0 ? '600' : '400',
                 marginBottom: '10px',
                 lineHeight: '1.5',
-                opacity: Math.max(0.4, 1 - (idx * 0.15))
+                opacity: idx === 0 ? 1 : Math.max(0.4, 1 - (idx * 0.15)),
+                transition: 'all 0.3s ease'
               }}
             >
               {item.text}
