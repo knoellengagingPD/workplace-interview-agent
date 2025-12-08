@@ -360,12 +360,13 @@ Important behavior rules:
         // When text transcription is complete, log it but keep it blue (audio still playing)
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
-          console.log('🤖 Clarity said:', transcript);
+          console.log('🤖 Clarity said (transcript done):', transcript);
           await logTranscript('clarity', transcript);
         }
         
         // When the entire response is done (audio finished playing), move text to grey
         if (data.type === 'response.done') {
+          console.log('✅ Response complete - moving text to grey');
           // Move current blue text to grey history
           if (currentText) {
             setTranscripts(prev => [{ text: currentText, timestamp: Date.now(), isComplete: true }, ...prev]);
@@ -383,6 +384,15 @@ Important behavior rules:
               }
             }
             
+            setCurrentText('');
+          }
+        }
+        
+        // Fallback: if response.audio.done fires, also trigger the grey transition
+        if (data.type === 'response.audio.done') {
+          console.log('✅ Audio complete - moving text to grey (fallback)');
+          if (currentText) {
+            setTranscripts(prev => [{ text: currentText, timestamp: Date.now(), isComplete: true }, ...prev]);
             setCurrentText('');
           }
         }
@@ -482,6 +492,11 @@ Important behavior rules:
   };
 
   const progressPercentage = (progress / 28) * 100;
+
+  // Helper function to replace "blank" with underscores in display
+  const formatTranscriptForDisplay = (text: string) => {
+    return text.replace(/\sblank\s/gi, ' __________ ');
+  };
 
   return (
     <div style={{ 
@@ -702,7 +717,7 @@ Important behavior rules:
                 lineHeight: '1.6'
               }}
             >
-              {currentText}
+              {formatTranscriptForDisplay(currentText)}
             </div>
           )}
           
@@ -720,7 +735,7 @@ Important behavior rules:
                 transition: 'all 0.3s ease'
               }}
             >
-              {item.text}
+              {formatTranscriptForDisplay(item.text)}
             </div>
           ))}
         </div>
