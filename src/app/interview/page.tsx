@@ -21,6 +21,13 @@ export default function InterviewPage() {
     setIsConnecting(true);
     
     try {
+      // Resume AudioContext if suspended (browser autoplay policy)
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+        console.log('✅ AudioContext resumed');
+      }
+
       const ephemeralKey = await startRealtimeSession();
       console.log('Got ephemeral key:', ephemeralKey);
       
@@ -30,9 +37,18 @@ export default function InterviewPage() {
       const audioEl = audioRef.current;
       if (!audioEl) throw new Error('Audio element not found');
 
-      pc.ontrack = (e) => {
+      // FIXED: Make ontrack async and explicitly call play()
+      pc.ontrack = async (e) => {
         console.log('Audio track received:', e);
         audioEl.srcObject = e.streams[0];
+        
+        // CRITICAL: Explicitly play the audio
+        try {
+          await audioEl.play();
+          console.log('✅ Audio playback started successfully');
+        } catch (error) {
+          console.error('❌ Audio playback failed:', error);
+        }
       };
 
       const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
