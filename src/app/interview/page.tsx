@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 async function startRealtimeSession() {
   const response = await fetch('/api/realtime-session', { method: 'POST' });
@@ -12,16 +12,25 @@ async function startRealtimeSession() {
 export default function InterviewPage() {
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [progress, setProgress] = useState(0); // 0-28 questions (23 main + 5 dream big)
+  const [transcripts, setTranscripts] = useState<Array<{text: string, timestamp: number}>>([]);
+  
   const audioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const sessionIdRef = useRef<string>(`session-${Date.now()}`);
 
+  // Auto-scroll transcript to bottom
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcripts]);
+
   const startInterview = async () => {
     setIsConnecting(true);
     
     try {
-      // Resume AudioContext if suspended (browser autoplay policy)
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
@@ -34,7 +43,6 @@ export default function InterviewPage() {
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
 
-      // Log all connection state changes
       pc.onconnectionstatechange = () => {
         console.log('🔌 Connection state:', pc.connectionState);
       };
@@ -50,7 +58,6 @@ export default function InterviewPage() {
       const audioEl = audioRef.current;
       if (!audioEl) throw new Error('Audio element not found');
 
-      // ENHANCED: More detailed ontrack logging
       pc.ontrack = async (e) => {
         console.log('🎵 Audio track received!');
         console.log('Track details:', {
@@ -67,7 +74,6 @@ export default function InterviewPage() {
           audioEl.srcObject = e.streams[0];
           console.log('✅ Stream assigned to audio element');
           
-          // CRITICAL: Explicitly play the audio
           try {
             await audioEl.play();
             console.log('✅ Audio playback started successfully');
@@ -94,6 +100,7 @@ export default function InterviewPage() {
         const sessionUpdate = {
           type: 'session.update',
           session: {
+            modalities: ['text', 'audio'],
             instructions: `You are Clarity, a calm and professional workplace well-being interviewer, conducting confidential interviews for workplace improvement.
 
 CRITICAL: You MUST start the conversation with this exact greeting, word-for-word:
@@ -353,6 +360,20 @@ Important behavior rules:
           const transcript = data.transcript;
           console.log('🤖 Clarity said:', transcript);
           await logTranscript('clarity', transcript);
+          
+          // Add to live transcript display
+          setTranscripts(prev => [...prev, { text: transcript, timestamp: Date.now() }]);
+          
+          // Track progress based on keywords in Clarity's speech
+          if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
+            setProgress(prev => Math.max(prev, 23)); // Started Dream Big section
+          } else if (transcript.match(/Q\d+\.|question \d+/i)) {
+            const match = transcript.match(/Q(\d+)|question (\d+)/i);
+            if (match) {
+              const questionNum = parseInt(match[1] || match[2]);
+              setProgress(questionNum);
+            }
+          }
         }
 
         if (data.type === 'error') {
@@ -384,7 +405,6 @@ Important behavior rules:
       await pc.setRemoteDescription(answer);
       console.log('Remote description set successfully');
 
-      // NEW: Check for tracks after setting remote description
       setTimeout(() => {
         const receivers = pc.getReceivers();
         console.log('📊 Active receivers:', receivers.length);
@@ -421,6 +441,19 @@ Important behavior rules:
     }
   };
 
+  const togglePause = () => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    if (isPaused) {
+      audioEl.play();
+      setIsPaused(false);
+    } else {
+      audioEl.pause();
+      setIsPaused(true);
+    }
+  };
+
   const stopInterview = () => {
     if (dcRef.current) {
       dcRef.current.close();
@@ -432,142 +465,261 @@ Important behavior rules:
       audioRef.current.srcObject = null;
     }
     setIsActive(false);
+    setTranscripts([]);
+    setProgress(0);
   };
+
+  const progressPercentage = (progress / 28) * 100;
 
   return (
     <div style={{ 
       minHeight: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px'
+      padding: '20px',
+      position: 'relative'
     }}>
+      {/* Main Content */}
       <div style={{
-        background: 'white',
-        borderRadius: '20px',
-        padding: '60px 40px',
-        maxWidth: '500px',
-        width: '100%',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        textAlign: 'center'
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingBottom: '120px' // Space for transcript
       }}>
-        <h1 style={{
-          fontSize: '32px',
-          fontWeight: '700',
-          marginBottom: '20px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
+        <div style={{
+          background: 'white',
+          borderRadius: '20px',
+          padding: '60px 40px',
+          maxWidth: '500px',
+          width: '100%',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          textAlign: 'center'
         }}>
-          Welcome to the<br />Engaging Workplace<br />Well-Being Interview Experience!
-        </h1>
-        
-        <p style={{
-          fontSize: '16px',
-          color: '#666',
-          marginBottom: '40px',
-          lineHeight: '1.6'
-        }}>
-          When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will be combined with others to support workplace improvement.
-        </p>
-
-        {!isActive && !isConnecting && (
-          <button
-            onClick={startInterview}
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50px',
-              padding: '18px 48px',
-              fontSize: '18px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              boxShadow: '0 10px 30px rgba(102, 126, 234, 0.4)',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 15px 40px rgba(102, 126, 234, 0.5)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 10px 30px rgba(102, 126, 234, 0.4)';
-            }}
-          >
-            Start Interview
-          </button>
-        )}
-
-        {isConnecting && (
-          <div style={{
-            fontSize: '18px',
-            color: '#667eea',
-            fontWeight: '600'
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: '700',
+            marginBottom: '20px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
           }}>
-            Connecting...
-          </div>
-        )}
+            Welcome to the<br />Engaging Workplace<br />Well-Being Interview Experience!
+          </h1>
+          
+          <p style={{
+            fontSize: '16px',
+            color: '#666',
+            marginBottom: '40px',
+            lineHeight: '1.6'
+          }}>
+            When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will be combined with others to support workplace improvement.
+          </p>
 
-        {isActive && (
-          <div>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              margin: '0 auto 30px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              animation: 'pulse 2s ease-in-out infinite',
-            }}>
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                background: 'white',
-              }} />
-            </div>
-            
-            <p style={{
-              fontSize: '18px',
-              color: '#667eea',
-              marginBottom: '30px',
-              fontWeight: '600'
-            }}>
-              Interview in progress...
-            </p>
-            
+          {!isActive && !isConnecting && (
             <button
-              onClick={stopInterview}
+              onClick={startInterview}
               style={{
-                background: '#ef4444',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '50px',
-                padding: '14px 40px',
-                fontSize: '16px',
+                padding: '18px 48px',
+                fontSize: '18px',
                 fontWeight: '600',
                 cursor: 'pointer',
+                boxShadow: '0 10px 30px rgba(102, 126, 234, 0.4)',
                 transition: 'all 0.3s ease',
               }}
               onMouseOver={(e) => {
-                e.currentTarget.style.background = '#dc2626';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 15px 40px rgba(102, 126, 234, 0.5)';
               }}
               onMouseOut={(e) => {
-                e.currentTarget.style.background = '#ef4444';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 10px 30px rgba(102, 126, 234, 0.4)';
               }}
             >
-              Stop Interview
+              Start Interview
             </button>
-          </div>
-        )}
+          )}
 
-        <audio ref={audioRef} autoPlay />
+          {isConnecting && (
+            <div style={{
+              fontSize: '18px',
+              color: '#667eea',
+              fontWeight: '600'
+            }}>
+              Connecting...
+            </div>
+          )}
+
+          {isActive && (
+            <div>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                background: isPaused ? '#999' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                margin: '0 auto 30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                animation: isPaused ? 'none' : 'pulse 2s ease-in-out infinite',
+              }}>
+                <div style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  background: 'white',
+                }} />
+              </div>
+              
+              <p style={{
+                fontSize: '18px',
+                color: '#667eea',
+                marginBottom: '20px',
+                fontWeight: '600'
+              }}>
+                {isPaused ? 'Interview paused' : 'Interview in progress...'}
+              </p>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button
+                  onClick={togglePause}
+                  style={{
+                    background: '#f59e0b',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50px',
+                    padding: '14px 40px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = '#d97706';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = '#f59e0b';
+                  }}
+                >
+                  {isPaused ? '▶ Resume' : '⏸ Pause'}
+                </button>
+
+                <button
+                  onClick={stopInterview}
+                  style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50px',
+                    padding: '14px 40px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = '#dc2626';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = '#ef4444';
+                  }}
+                >
+                  ⏹ Stop
+                </button>
+              </div>
+            </div>
+          )}
+
+          <audio ref={audioRef} autoPlay />
+        </div>
       </div>
+
+      {/* Live Transcript Display */}
+      {isActive && transcripts.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '60px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '90%',
+          maxWidth: '800px',
+          maxHeight: '150px',
+          overflowY: 'auto',
+          background: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '15px',
+          padding: '15px 20px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+        }}>
+          {transcripts.map((item, idx) => {
+            const isLatest = idx === transcripts.length - 1;
+            return (
+              <div
+                key={idx}
+                style={{
+                  color: isLatest ? '#667eea' : '#999',
+                  fontSize: isLatest ? '16px' : '14px',
+                  fontWeight: isLatest ? '600' : '400',
+                  marginBottom: '8px',
+                  transition: 'all 0.3s ease',
+                  lineHeight: '1.5'
+                }}
+              >
+                {item.text}
+              </div>
+            );
+          })}
+          <div ref={transcriptEndRef} />
+        </div>
+      )}
+
+      {/* Progress Bar */}
+      {isActive && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '50px',
+          background: 'rgba(255, 255, 255, 0.95)',
+          boxShadow: '0 -5px 20px rgba(0,0,0,0.1)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          padding: '0 20px'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: '5px',
+            fontSize: '12px',
+            color: '#667eea',
+            fontWeight: '600'
+          }}>
+            <span>Progress</span>
+            <span>{progress} / 28 Questions</span>
+          </div>
+          <div style={{
+            width: '100%',
+            height: '8px',
+            background: '#e5e7eb',
+            borderRadius: '4px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: `${progressPercentage}%`,
+              height: '100%',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              transition: 'width 0.5s ease',
+              borderRadius: '4px'
+            }} />
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes pulse {
