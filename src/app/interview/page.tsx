@@ -34,20 +34,48 @@ export default function InterviewPage() {
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
 
+      // Log all connection state changes
+      pc.onconnectionstatechange = () => {
+        console.log('🔌 Connection state:', pc.connectionState);
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('🧊 ICE connection state:', pc.iceConnectionState);
+      };
+
+      pc.onicegatheringstatechange = () => {
+        console.log('📡 ICE gathering state:', pc.iceGatheringState);
+      };
+
       const audioEl = audioRef.current;
       if (!audioEl) throw new Error('Audio element not found');
 
-      // FIXED: Make ontrack async and explicitly call play()
+      // ENHANCED: More detailed ontrack logging
       pc.ontrack = async (e) => {
-        console.log('Audio track received:', e);
-        audioEl.srcObject = e.streams[0];
+        console.log('🎵 Audio track received!');
+        console.log('Track details:', {
+          kind: e.track.kind,
+          id: e.track.id,
+          label: e.track.label,
+          enabled: e.track.enabled,
+          muted: e.track.muted,
+          readyState: e.track.readyState
+        });
+        console.log('Streams:', e.streams);
         
-        // CRITICAL: Explicitly play the audio
-        try {
-          await audioEl.play();
-          console.log('✅ Audio playback started successfully');
-        } catch (error) {
-          console.error('❌ Audio playback failed:', error);
+        if (e.streams && e.streams[0]) {
+          audioEl.srcObject = e.streams[0];
+          console.log('✅ Stream assigned to audio element');
+          
+          // CRITICAL: Explicitly play the audio
+          try {
+            await audioEl.play();
+            console.log('✅ Audio playback started successfully');
+          } catch (error) {
+            console.error('❌ Audio playback failed:', error);
+          }
+        } else {
+          console.error('❌ No streams in track event');
         }
       };
 
@@ -355,6 +383,20 @@ Important behavior rules:
       };
       await pc.setRemoteDescription(answer);
       console.log('Remote description set successfully');
+
+      // NEW: Check for tracks after setting remote description
+      setTimeout(() => {
+        const receivers = pc.getReceivers();
+        console.log('📊 Active receivers:', receivers.length);
+        receivers.forEach((receiver, idx) => {
+          console.log(`Receiver ${idx}:`, {
+            track: receiver.track?.kind,
+            id: receiver.track?.id,
+            enabled: receiver.track?.enabled,
+            readyState: receiver.track?.readyState
+          });
+        });
+      }, 1000);
 
     } catch (error) {
       console.error('Error starting interview:', error);
