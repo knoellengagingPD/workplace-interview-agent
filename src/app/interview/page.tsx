@@ -14,18 +14,13 @@ export default function InterviewPage() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0); // 0-28 questions (23 main + 5 dream big)
-  const [transcripts, setTranscripts] = useState<Array<{text: string, timestamp: number}>>([]);
+  const [transcripts, setTranscripts] = useState<Array<{text: string, timestamp: number, isComplete: boolean}>>([]);
+  const [currentText, setCurrentText] = useState('');
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const sessionIdRef = useRef<string>(`session-${Date.now()}`);
-
-  // Auto-scroll transcript to bottom
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcripts]);
 
   const startInterview = async () => {
     setIsConnecting(true);
@@ -356,17 +351,25 @@ Important behavior rules:
           await logTranscript('user', transcript);
         }
         
+        // Real-time streaming text as Clarity speaks
+        if (data.type === 'response.audio_transcript.delta') {
+          const delta = data.delta;
+          setCurrentText(prev => prev + delta);
+        }
+        
+        // When Clarity finishes speaking, save the complete transcript
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
           console.log('🤖 Clarity said:', transcript);
           await logTranscript('clarity', transcript);
           
-          // Add to live transcript display
-          setTranscripts(prev => [...prev, { text: transcript, timestamp: Date.now() }]);
+          // Add complete transcript to history
+          setTranscripts(prev => [{ text: transcript, timestamp: Date.now(), isComplete: true }, ...prev]);
+          setCurrentText('');
           
           // Track progress based on keywords in Clarity's speech
           if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
-            setProgress(prev => Math.max(prev, 23)); // Started Dream Big section
+            setProgress(prev => Math.max(prev, 23));
           } else if (transcript.match(/Q\d+\.|question \d+/i)) {
             const match = transcript.match(/Q(\d+)|question (\d+)/i);
             if (match) {
@@ -466,6 +469,7 @@ Important behavior rules:
     }
     setIsActive(false);
     setTranscripts([]);
+    setCurrentText('');
     setProgress(0);
   };
 
@@ -476,7 +480,7 @@ Important behavior rules:
       minHeight: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
       padding: '20px',
       position: 'relative'
     }}>
@@ -486,13 +490,13 @@ Important behavior rules:
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingBottom: '120px' // Space for transcript
+        paddingBottom: '120px'
       }}>
         <div style={{
           background: 'white',
           borderRadius: '20px',
           padding: '60px 40px',
-          maxWidth: '500px',
+          maxWidth: '875px', // 75% wider than 500px
           width: '100%',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           textAlign: 'center'
@@ -501,7 +505,7 @@ Important behavior rules:
             fontSize: '32px',
             fontWeight: '700',
             marginBottom: '20px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}>
@@ -521,7 +525,7 @@ Important behavior rules:
             <button
               onClick={startInterview}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '50px',
@@ -529,16 +533,16 @@ Important behavior rules:
                 fontSize: '18px',
                 fontWeight: '600',
                 cursor: 'pointer',
-                boxShadow: '0 10px 30px rgba(102, 126, 234, 0.4)',
+                boxShadow: '0 10px 30px rgba(59, 130, 246, 0.4)',
                 transition: 'all 0.3s ease',
               }}
               onMouseOver={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 15px 40px rgba(102, 126, 234, 0.5)';
+                e.currentTarget.style.boxShadow = '0 15px 40px rgba(59, 130, 246, 0.5)';
               }}
               onMouseOut={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 10px 30px rgba(102, 126, 234, 0.4)';
+                e.currentTarget.style.boxShadow = '0 10px 30px rgba(59, 130, 246, 0.4)';
               }}
             >
               Start Interview
@@ -548,7 +552,7 @@ Important behavior rules:
           {isConnecting && (
             <div style={{
               fontSize: '18px',
-              color: '#667eea',
+              color: '#3b82f6',
               fontWeight: '600'
             }}>
               Connecting...
@@ -558,40 +562,64 @@ Important behavior rules:
           {isActive && (
             <div>
               <div style={{
-                width: '80px',
-                height: '80px',
+                width: '120px',
+                height: '120px',
                 borderRadius: '50%',
-                background: isPaused ? '#999' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: isPaused ? '#999' : 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
                 margin: '0 auto 30px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                animation: isPaused ? 'none' : 'pulse 2s ease-in-out infinite',
+                animation: isPaused ? 'none' : 'pulse 1.5s ease-in-out infinite',
               }}>
                 <div style={{
-                  width: '60px',
-                  height: '60px',
+                  width: '90px',
+                  height: '90px',
                   borderRadius: '50%',
                   background: 'white',
                 }} />
               </div>
               
-              <p style={{
-                fontSize: '18px',
-                color: '#667eea',
-                marginBottom: '20px',
-                fontWeight: '600'
+              {/* Progress Bar where "Interview in progress" was */}
+              <div style={{
+                marginBottom: '30px',
+                padding: '0 20px'
               }}>
-                {isPaused ? 'Interview paused' : 'Interview in progress...'}
-              </p>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                  fontSize: '14px',
+                  color: '#3b82f6',
+                  fontWeight: '600'
+                }}>
+                  <span>Progress</span>
+                  <span>{progress} / 28 Questions</span>
+                </div>
+                <div style={{
+                  width: '100%',
+                  height: '10px',
+                  background: '#e5e7eb',
+                  borderRadius: '5px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    width: `${progressPercentage}%`,
+                    height: '100%',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
+                    transition: 'width 0.5s ease',
+                    borderRadius: '5px'
+                  }} />
+                </div>
+              </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                 <button
                   onClick={togglePause}
                   style={{
-                    background: '#f59e0b',
-                    color: 'white',
-                    border: 'none',
+                    background: 'white',
+                    color: '#f59e0b',
+                    border: '2px solid #f59e0b',
                     borderRadius: '50px',
                     padding: '14px 40px',
                     fontSize: '16px',
@@ -600,10 +628,10 @@ Important behavior rules:
                     transition: 'all 0.3s ease',
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#d97706';
+                    e.currentTarget.style.background = '#fef3c7';
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.background = '#f59e0b';
+                    e.currentTarget.style.background = 'white';
                   }}
                 >
                   {isPaused ? '▶ Resume' : '⏸ Pause'}
@@ -612,9 +640,9 @@ Important behavior rules:
                 <button
                   onClick={stopInterview}
                   style={{
-                    background: '#ef4444',
-                    color: 'white',
-                    border: 'none',
+                    background: 'white',
+                    color: '#ef4444',
+                    border: '2px solid #ef4444',
                     borderRadius: '50px',
                     padding: '14px 40px',
                     fontSize: '16px',
@@ -623,10 +651,10 @@ Important behavior rules:
                     transition: 'all 0.3s ease',
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#dc2626';
+                    e.currentTarget.style.background = '#fee2e2';
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.background = '#ef4444';
+                    e.currentTarget.style.background = 'white';
                   }}
                 >
                   ⏹ Stop
@@ -639,85 +667,54 @@ Important behavior rules:
         </div>
       </div>
 
-      {/* Live Transcript Display */}
-      {isActive && transcripts.length > 0 && (
+      {/* Live Transcript Display - New text appears at top */}
+      {isActive && (currentText || transcripts.length > 0) && (
         <div style={{
           position: 'fixed',
-          bottom: '60px',
+          bottom: '20px',
           left: '50%',
           transform: 'translateX(-50%)',
           width: '90%',
-          maxWidth: '800px',
-          maxHeight: '150px',
+          maxWidth: '1000px',
+          maxHeight: '180px',
           overflowY: 'auto',
           background: 'rgba(255, 255, 255, 0.95)',
           borderRadius: '15px',
-          padding: '15px 20px',
+          padding: '20px 25px',
           boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
         }}>
-          {transcripts.map((item, idx) => {
-            const isLatest = idx === transcripts.length - 1;
-            return (
-              <div
-                key={idx}
-                style={{
-                  color: isLatest ? '#667eea' : '#999',
-                  fontSize: isLatest ? '16px' : '14px',
-                  fontWeight: isLatest ? '600' : '400',
-                  marginBottom: '8px',
-                  transition: 'all 0.3s ease',
-                  lineHeight: '1.5'
-                }}
-              >
-                {item.text}
-              </div>
-            );
-          })}
-          <div ref={transcriptEndRef} />
-        </div>
-      )}
-
-      {/* Progress Bar */}
-      {isActive && (
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '50px',
-          background: 'rgba(255, 255, 255, 0.95)',
-          boxShadow: '0 -5px 20px rgba(0,0,0,0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          padding: '0 20px'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '5px',
-            fontSize: '12px',
-            color: '#667eea',
-            fontWeight: '600'
-          }}>
-            <span>Progress</span>
-            <span>{progress} / 28 Questions</span>
-          </div>
-          <div style={{
-            width: '100%',
-            height: '8px',
-            background: '#e5e7eb',
-            borderRadius: '4px',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              width: `${progressPercentage}%`,
-              height: '100%',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              transition: 'width 0.5s ease',
-              borderRadius: '4px'
-            }} />
-          </div>
+          {/* Current streaming text - appears first */}
+          {currentText && (
+            <div
+              style={{
+                color: '#3b82f6',
+                fontSize: '18px',
+                fontWeight: '600',
+                marginBottom: '12px',
+                lineHeight: '1.6',
+                animation: 'fadeIn 0.3s ease-in'
+              }}
+            >
+              {currentText}
+            </div>
+          )}
+          
+          {/* Previous transcripts - below current */}
+          {transcripts.map((item, idx) => (
+            <div
+              key={idx}
+              style={{
+                color: '#999',
+                fontSize: '15px',
+                fontWeight: '400',
+                marginBottom: '10px',
+                lineHeight: '1.5',
+                opacity: Math.max(0.4, 1 - (idx * 0.15))
+              }}
+            >
+              {item.text}
+            </div>
+          ))}
         </div>
       )}
 
@@ -728,8 +725,18 @@ Important behavior rules:
             opacity: 1;
           }
           50% {
-            transform: scale(1.05);
-            opacity: 0.8;
+            transform: scale(1.15);
+            opacity: 0.7;
+          }
+        }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
       `}</style>
