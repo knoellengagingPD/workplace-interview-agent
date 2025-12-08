@@ -358,25 +358,29 @@ Important behavior rules:
           setCurrentText(prev => prev + delta);
         }
         
-        // When text transcription is complete, store it and log it
+        // When text transcription is complete, store it and keep showing streaming text
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
           console.log('🤖 Clarity said (transcript done):', transcript);
-          setPendingTranscript(transcript); // Store for when audio finishes
+          setPendingTranscript(transcript); // Store complete version
           await logTranscript('clarity', transcript);
         }
         
-        // When audio finishes playing, move text to grey
+        // When audio finishes playing, immediately move text to grey
         if (data.type === 'response.audio.done') {
           console.log('🔊 Audio playback complete - moving text to grey');
-          if (pendingTranscript) {
-            setTranscripts(prev => [{ text: pendingTranscript, timestamp: Date.now(), isComplete: true }, ...prev]);
+          const textToMove = pendingTranscript || currentText;
+          if (textToMove) {
+            // Immediately update both states in the same tick
+            setTranscripts(prev => [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev]);
+            setPendingTranscript('');
+            setCurrentText('');
             
-            // Track progress based on the completed text
-            if (pendingTranscript.includes('Dream Big') || pendingTranscript.includes('dream big')) {
+            // Track progress
+            if (textToMove.includes('Dream Big') || textToMove.includes('dream big')) {
               setProgress(prev => Math.max(prev, 23));
             } else {
-              const questionMatch = pendingTranscript.match(/^Question (\d+)\./);
+              const questionMatch = textToMove.match(/^Question (\d+)\./);
               if (questionMatch) {
                 const questionNum = parseInt(questionMatch[1]);
                 if (questionNum >= 1 && questionNum <= 23) {
@@ -384,17 +388,14 @@ Important behavior rules:
                 }
               }
             }
-            
-            setPendingTranscript('');
-            setCurrentText('');
           }
         }
         
         // Fallback: when entire response is done
         if (data.type === 'response.done') {
-          console.log('✅ Response complete');
-          if (pendingTranscript || currentText) {
-            const textToMove = pendingTranscript || currentText;
+          console.log('✅ Response complete - fallback check');
+          const textToMove = pendingTranscript || currentText;
+          if (textToMove && !transcripts.some(t => t.text === textToMove)) {
             setTranscripts(prev => [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev]);
             setPendingTranscript('');
             setCurrentText('');
