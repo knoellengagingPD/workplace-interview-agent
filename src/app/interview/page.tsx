@@ -357,28 +357,33 @@ Important behavior rules:
           setCurrentText(prev => prev + delta);
         }
         
-        // When Clarity finishes speaking, save the complete transcript
+        // When text transcription is complete, log it but keep it blue (audio still playing)
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
           console.log('🤖 Clarity said:', transcript);
           await logTranscript('clarity', transcript);
-          
-          // Add complete transcript to history
-          setTranscripts(prev => [{ text: transcript, timestamp: Date.now(), isComplete: true }, ...prev]);
-          setCurrentText('');
-          
-          // Track progress based on keywords in Clarity's speech
-          if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
-            setProgress(prev => Math.max(prev, 23));
-          } else {
-            // Only track if the transcript starts with "Question X." pattern
-            const questionMatch = transcript.match(/^Question (\d+)\./);
-            if (questionMatch) {
-              const questionNum = parseInt(questionMatch[1]);
-              if (questionNum >= 1 && questionNum <= 23) {
-                setProgress(questionNum);
+        }
+        
+        // When the entire response is done (audio finished playing), move text to grey
+        if (data.type === 'response.done') {
+          // Move current blue text to grey history
+          if (currentText) {
+            setTranscripts(prev => [{ text: currentText, timestamp: Date.now(), isComplete: true }, ...prev]);
+            
+            // Track progress based on the completed text
+            if (currentText.includes('Dream Big') || currentText.includes('dream big')) {
+              setProgress(prev => Math.max(prev, 23));
+            } else {
+              const questionMatch = currentText.match(/^Question (\d+)\./);
+              if (questionMatch) {
+                const questionNum = parseInt(questionMatch[1]);
+                if (questionNum >= 1 && questionNum <= 23) {
+                  setProgress(questionNum);
+                }
               }
             }
+            
+            setCurrentText('');
           }
         }
 
