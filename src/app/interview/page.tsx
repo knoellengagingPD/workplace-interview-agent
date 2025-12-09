@@ -14,8 +14,9 @@ export default function InterviewPage() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0); // 0-28 questions (23 main + 5 dream big)
-  const [completedTexts, setCompletedTexts] = useState<string[]>([]); // Grey completed transcripts
-  const [currentText, setCurrentText] = useState(''); // Blue streaming text
+  const [transcripts, setTranscripts] = useState<Array<{text: string, timestamp: number, isComplete: boolean}>>([]);
+  const [currentText, setCurrentText] = useState('');
+  const [pendingTranscript, setPendingTranscript] = useState(''); // Store complete transcript
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -359,17 +360,19 @@ Important behavior rules:
           setCurrentText(prev => prev + delta);
         }
         
-        // When text transcription is complete
+        // When text transcription is complete, store it
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
-          console.log('🤖 Clarity said:', transcript);
+          console.log('🤖 Clarity said (transcript done):', transcript);
+          setPendingTranscript(transcript);
           await logTranscript('clarity', transcript);
           
-          // Track progress immediately
+          // Track progress immediately when we see the question number
           if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
             console.log('📊 Progress: Dream Big section (23/28)');
             setProgress(prev => Math.max(prev, 23));
           } else {
+            // Look for "Question X" anywhere in the text
             const questionMatch = transcript.match(/Question (\d+)/i);
             if (questionMatch) {
               const questionNum = parseInt(questionMatch[1]);
@@ -381,28 +384,39 @@ Important behavior rules:
           }
         }
         
-        // When audio finishes - MOVE TO GREY
+        // When audio finishes playing - MOVE TEXT TO GREY
         if (data.type === 'response.audio.done') {
-          console.log('🔊 Audio complete - moving text to grey');
-          if (currentText.trim()) {
-            setCompletedTexts(prev => [currentText, ...prev]);
+          console.log('🔊 AUDIO DONE - Moving text to grey');
+          const textToMove = pendingTranscript || currentText;
+          if (textToMove && textToMove.trim()) {
+            setTranscripts(prev => {
+              const newHistory = [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev];
+              console.log('✅ Text moved to grey history. Total items:', newHistory.length);
+              return newHistory;
+            });
+            setPendingTranscript('');
             setCurrentText('');
           }
         }
         
         // Fallback on response.done
         if (data.type === 'response.done') {
-          console.log('✅ Response complete');
+          console.log('✅ Response complete (fallback)');
           setTimeout(() => {
-            if (currentText.trim()) {
-              setCompletedTexts(prev => {
-                // Don't add duplicates
-                if (prev[0] === currentText) return prev;
-                return [currentText, ...prev];
+            const textToMove = pendingTranscript || currentText;
+            if (textToMove && textToMove.trim()) {
+              setTranscripts(prev => {
+                if (prev.length > 0 && prev[0].text === textToMove) {
+                  console.log('⚠️ Text already in history, skipping');
+                  return prev;
+                }
+                console.log('✅ Fallback: Moving text to grey');
+                return [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev];
               });
+              setPendingTranscript('');
               setCurrentText('');
             }
-          }, 100);
+          }, 150);
         }
 
         if (data.type === 'error') {
@@ -498,8 +512,9 @@ Important behavior rules:
       audioRef.current.srcObject = null;
     }
     setIsActive(false);
-    setCompletedTexts([]);
+    setTranscripts([]);
     setCurrentText('');
+    setPendingTranscript('');
     setProgress(0);
   };
 
@@ -718,10 +733,9 @@ Important behavior rules:
           padding: '20px 25px',
           boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
         }}>
-          {/* Current streaming text - BLUE and BOLD */}
+          {/* Current streaming text - blue and bold while streaming */}
           {currentText && (
             <div
-              className="animate-fade-in"
               style={{
                 color: '#3b82f6',
                 fontSize: '18px',
@@ -734,11 +748,10 @@ Important behavior rules:
             </div>
           )}
           
-          {/* Completed transcripts - GREY */}
-          {completedTexts.map((text, idx) => (
+          {/* Previous transcripts - all fade to grey progressively */}
+          {transcripts.map((item, idx) => (
             <div
-              key={`completed-${idx}`}
-              className="animate-fade-in"
+              key={idx}
               style={{
                 color: '#999',
                 fontSize: '15px',
@@ -746,9 +759,10 @@ Important behavior rules:
                 marginBottom: '10px',
                 lineHeight: '1.5',
                 opacity: Math.max(0.4, 1 - (idx * 0.15)),
+                transition: 'all 0.3s ease'
               }}
             >
-              {formatTranscriptForDisplay(text)}
+              {formatTranscriptForDisplay(item.text)}
             </div>
           ))}
         </div>
@@ -774,9 +788,6 @@ Important behavior rules:
             opacity: 1;
             transform: translateY(0);
           }
-        }
-        .animate-fade-in {
-          animation: fadeIn 0.3s ease-out;
         }
       `}</style>
     </div>
