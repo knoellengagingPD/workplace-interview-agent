@@ -119,6 +119,8 @@ Core workflow:
 
 IMPORTANT: When recording responses, always include both the numeric value and the text label. For example, if someone says "Somewhat satisfied", record it as "3 - Somewhat satisfied".
 
+NOTE ON SCALES: Questions 12, 13, 17, 18, 19, and 21 have REVERSED scales (higher numbers = better outcomes) because they measure negative constructs. For these questions, lower numbers indicate worse conditions (more interference, stress, or distress).
+
 Work Demands and Rewards (5 questions):
 
 Question 1. "Overall, I am blank with my job."
@@ -208,23 +210,23 @@ Work-Life Balance and Flexibility (3 questions):
 
 Question 12. "How often do the demands of your job interfere with your personal life?"
 Response scale:
-1 - Never
-2 - Almost never (a few times a year or less)
-3 - Rarely (once a month or less)
+7 - Never
+6 - Almost never (a few times a year or less)
+5 - Rarely (once a month or less)
 4 - Sometimes (a few times a month)
-5 - Often (once a week)
-6 - Very often (a few times a week)
-7 - Always (every day)
+3 - Often (once a week)
+2 - Very often (a few times a week)
+1 - Always (every day)
 
 Question 13. "How often do the demands of your personal life interfere with your work on the job?"
 Response scale:
-1 - Never
-2 - Almost never (a few times a year or less)
-3 - Rarely (once a month or less)
+7 - Never
+6 - Almost never (a few times a year or less)
+5 - Rarely (once a month or less)
 4 - Sometimes (a few times a month)
-5 - Often (once a week)
-6 - Very often (a few times a week)
-7 - Always (every day)
+3 - Often (once a week)
+2 - Very often (a few times a week)
+1 - Always (every day)
 
 Question 14. "I have the freedom to vary my work schedule."
 Response scale:
@@ -248,27 +250,27 @@ Response: Please answer with a number of days from 0 to 30.
 
 Question 17. "How often do you experience stress with regard to your work?"
 Response scale:
-1 - Never
-2 - Almost never (a few times a year or less)
-3 - Rarely (once a month or less)
+7 - Never
+6 - Almost never (a few times a year or less)
+5 - Rarely (once a month or less)
 4 - Sometimes (a few times a month)
-5 - Often (once a week)
-6 - Very often (a few times a week)
-7 - Always (every day)
+3 - Often (once a week)
+2 - Very often (a few times a week)
+1 - Always (every day)
 
 Question 18. "Over the last 2 weeks, how often have you been bothered by feeling down, depressed, or hopeless?"
 Response scale:
-1 - Not at all
-2 - Several days
-3 - More than half the days
-4 - Nearly every day
+4 - Not at all
+3 - Several days
+2 - More than half the days
+1 - Nearly every day
 
 Question 19. "Over the last 2 weeks, how often have you been bothered by feeling nervous, anxious, or on edge?"
 Response scale:
-1 - Not at all
-2 - Several days
-3 - More than half the days
-4 - Nearly every day
+4 - Not at all
+3 - Several days
+2 - More than half the days
+1 - Nearly every day
 
 Question 20. "In a typical week, how many days do you get at least 20 minutes of high intensity physical activity? High intensity activity lasts at least 10 minutes and increases your heart rate, makes you sweat, and may make you feel out of breath; examples are running, fast cycling, and strenuous, continuous lifting of heavy objects."
 Response: Please answer with a number of days from 0 to 7.
@@ -277,10 +279,10 @@ Discrimination, Harassment, and Violence (3 questions):
 
 Question 21. "I feel discriminated against in my job because of my gender."
 Response scale:
-1 - Strongly disagree
-2 - Somewhat disagree
-3 - Somewhat agree
-4 - Strongly agree
+4 - Strongly disagree
+3 - Somewhat disagree
+2 - Somewhat agree
+1 - Strongly agree
 
 Question 22. "In the past 12 months, were you sexually harassed by anyone while you were on the job?"
 Response scale:
@@ -358,48 +360,63 @@ Important behavior rules:
           setCurrentText(prev => prev + delta);
         }
         
-        // When text transcription is complete, store it and keep showing streaming text
+        // When text transcription is complete, store it
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
           console.log('🤖 Clarity said (transcript done):', transcript);
-          setPendingTranscript(transcript); // Store complete version
+          setPendingTranscript(transcript);
           await logTranscript('clarity', transcript);
-        }
-        
-        // When audio finishes playing, immediately move text to grey
-        if (data.type === 'response.audio.done') {
-          console.log('🔊 Audio playback complete - moving text to grey');
-          const textToMove = pendingTranscript || currentText;
-          if (textToMove) {
-            // Immediately update both states in the same tick
-            setTranscripts(prev => [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev]);
-            setPendingTranscript('');
-            setCurrentText('');
-            
-            // Track progress
-            if (textToMove.includes('Dream Big') || textToMove.includes('dream big')) {
-              setProgress(prev => Math.max(prev, 23));
-            } else {
-              const questionMatch = textToMove.match(/^Question (\d+)\./);
-              if (questionMatch) {
-                const questionNum = parseInt(questionMatch[1]);
-                if (questionNum >= 1 && questionNum <= 23) {
-                  setProgress(questionNum);
-                }
+          
+          // Track progress immediately when we see the question number
+          if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
+            console.log('📊 Progress: Dream Big section (23/28)');
+            setProgress(prev => Math.max(prev, 23));
+          } else {
+            // Look for "Question X" anywhere in the text
+            const questionMatch = transcript.match(/Question (\d+)/i);
+            if (questionMatch) {
+              const questionNum = parseInt(questionMatch[1]);
+              if (questionNum >= 1 && questionNum <= 23) {
+                console.log(`📊 Progress update: Question ${questionNum}/28`);
+                setProgress(questionNum);
               }
             }
           }
         }
         
-        // Fallback: when entire response is done
-        if (data.type === 'response.done') {
-          console.log('✅ Response complete - fallback check');
+        // When audio finishes playing - MOVE TEXT TO GREY
+        if (data.type === 'response.audio.done') {
+          console.log('🔊 AUDIO DONE - Moving text to grey');
           const textToMove = pendingTranscript || currentText;
-          if (textToMove && !transcripts.some(t => t.text === textToMove)) {
-            setTranscripts(prev => [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev]);
+          if (textToMove && textToMove.trim()) {
+            setTranscripts(prev => {
+              const newHistory = [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev];
+              console.log('✅ Text moved to grey history. Total items:', newHistory.length);
+              return newHistory;
+            });
             setPendingTranscript('');
             setCurrentText('');
           }
+        }
+        
+        // Fallback on response.done
+        if (data.type === 'response.done') {
+          console.log('✅ Response complete (fallback)');
+          setTimeout(() => {
+            const textToMove = pendingTranscript || currentText;
+            if (textToMove && textToMove.trim()) {
+              setTranscripts(prev => {
+                if (prev.length > 0 && prev[0].text === textToMove) {
+                  console.log('⚠️ Text already in history, skipping');
+                  return prev;
+                }
+                console.log('✅ Fallback: Moving text to grey');
+                return [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev];
+              });
+              setPendingTranscript('');
+              setCurrentText('');
+            }
+          }, 150);
         }
 
         if (data.type === 'error') {
