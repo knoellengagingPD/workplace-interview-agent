@@ -350,17 +350,20 @@ Closing:
             setCurrentText(transcript);
           }
           
-          // Track progress
-          const questionMatch = transcript.match(/^Question (\d+)\./i);
+          // Track progress - match "Question X" anywhere in transcript
+          const questionMatch = transcript.match(/Question (\d+)/i);
           if (questionMatch) {
             const questionNum = parseInt(questionMatch[1]);
             if (questionNum >= 1 && questionNum <= 23) {
               console.log(`📊 Progress: Question ${questionNum}/28`);
               setProgress(questionNum);
+            } else if (questionNum >= 24 && questionNum <= 28) {
+              console.log(`📊 Progress: Dream Big Question ${questionNum}/28`);
+              setProgress(questionNum);
             }
-          } else if (transcript.match(/dream big/i) && progress >= 23) {
-            console.log('📊 Progress: Dream Big section (24+)');
-            setProgress(24);
+          } else if (transcript.match(/dream big/i)) {
+            console.log('📊 Progress: Dream Big section started (24)');
+            setProgress(Math.max(progress, 24));
           }
         }
         
