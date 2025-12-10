@@ -16,11 +16,13 @@ export default function InterviewPage() {
   const [progress, setProgress] = useState(0);
   const [completedTexts, setCompletedTexts] = useState<string[]>([]);
   const [currentText, setCurrentText] = useState('');
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const sessionIdRef = useRef<string>(`session-${Date.now()}`);
+  const pendingTextRef = useRef<string>('');
 
   const logTranscript = async (speaker: string, transcript: string) => {
     try {
@@ -314,19 +316,41 @@ Closing:
           await logTranscript('user', transcript);
         }
         
-        // Clarity speaking - build up text character by character
-        if (data.type === 'response.audio_transcript.delta') {
-          setCurrentText(prev => prev + data.delta);
-          console.log('📝 Building text:', data.delta);
+        // Audio started
+        if (data.type === 'response.audio.delta') {
+          if (!isAudioPlaying) {
+            console.log('🔊 Audio STARTED playing');
+            setIsAudioPlaying(true);
+          }
         }
         
-        // Text is complete but audio still playing - just log and track progress
+        // Text coming in - build it up character by character
+        if (data.type === 'response.audio_transcript.delta') {
+          const delta = data.delta;
+          console.log('📝 Delta:', delta);
+          setCurrentText(prev => prev + delta);
+          pendingTextRef.current += delta;
+        }
+        
+        // Text complete - but DON'T clear, audio still playing
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
-          console.log('✅ Text complete (audio still playing):', transcript);
+          console.log('✅ Transcript DONE (but audio still playing):', transcript);
+          console.log('   Current state - isAudioPlaying:', isAudioPlaying);
+          console.log('   Current text length:', currentText.length);
+          
           await logTranscript('clarity', transcript);
           
-          // Track progress - only if transcript STARTS with "Question X"
+          // Save complete text to ref for safety
+          pendingTextRef.current = transcript;
+          
+          // Ensure text is displayed
+          if (!currentText || currentText.length < transcript.length) {
+            console.log('   Updating currentText to full transcript');
+            setCurrentText(transcript);
+          }
+          
+          // Track progress
           const questionMatch = transcript.match(/^Question (\d+)\./i);
           if (questionMatch) {
             const questionNum = parseInt(questionMatch[1]);
@@ -340,33 +364,44 @@ Closing:
           }
         }
         
-        // AUDIO DONE - NOW move text from blue to grey
+        // CRITICAL: Audio finished - NOW move text to grey
         if (data.type === 'response.audio.done') {
-          console.log('🔊 AUDIO COMPLETE - Moving blue text to grey');
-          setCompletedTexts(prev => {
-            // Only add if there's actual text
-            if (currentText.trim()) {
-              console.log('Moving to grey:', currentText);
-              return [currentText, ...prev];
-            }
-            return prev;
-          });
-          setCurrentText(''); // Clear blue text
+          console.log('🔊🔊🔊 AUDIO DONE - Moving text to grey 🔊🔊🔊');
+          console.log('   Text to move:', currentText || pendingTextRef.current);
+          
+          setIsAudioPlaying(false);
+          
+          const textToMove = currentText || pendingTextRef.current;
+          if (textToMove && textToMove.trim()) {
+            console.log('   ✅ Moving to grey history:', textToMove.substring(0, 50) + '...');
+            setCompletedTexts(prev => [textToMove, ...prev]);
+            setCurrentText('');
+            pendingTextRef.current = '';
+          } else {
+            console.log('   ⚠️ No text to move!');
+          }
         }
         
-        // Fallback safety
+        // Response done - safety check
         if (data.type === 'response.done') {
-          console.log('⚠️ Response done fallback triggered');
-          setTimeout(() => {
-            setCompletedTexts(prev => {
-              if (currentText.trim() && (prev.length === 0 || prev[0] !== currentText)) {
-                console.log('Fallback: Moving to grey:', currentText);
-                return [currentText, ...prev];
-              }
-              return prev;
-            });
-            setCurrentText('');
-          }, 200);
+          console.log('⚠️ Response.done - checking if cleanup needed');
+          console.log('   isAudioPlaying:', isAudioPlaying);
+          console.log('   currentText:', currentText ? currentText.substring(0, 50) + '...' : 'empty');
+          
+          // Only clean up if we somehow missed audio.done
+          if (!isAudioPlaying && currentText) {
+            console.log('   Fallback: Moving text to grey');
+            setTimeout(() => {
+              setCompletedTexts(prev => {
+                if (currentText && (prev.length === 0 || prev[0] !== currentText)) {
+                  return [currentText, ...prev];
+                }
+                return prev;
+              });
+              setCurrentText('');
+              pendingTextRef.current = '';
+            }, 300);
+          }
         }
       });
 
@@ -407,6 +442,8 @@ Closing:
     setCompletedTexts([]);
     setCurrentText('');
     setProgress(0);
+    setIsAudioPlaying(false);
+    pendingTextRef.current = '';
   };
 
   const progressPercentage = (progress / 28) * 100;
@@ -626,10 +663,10 @@ Closing:
                   color: '#3b82f6',
                   fontSize: '16px',
                   fontWeight: '600',
-                  marginBottom: '15px',
+                  marginBottom: completedTexts.length > 0 ? '20px' : '0',
+                  paddingBottom: completedTexts.length > 0 ? '15px' : '0',
+                  borderBottom: completedTexts.length > 0 ? '2px solid #dbeafe' : 'none',
                   lineHeight: '1.6',
-                  paddingBottom: '15px',
-                  borderBottom: completedTexts.length > 0 ? '2px solid #dbeafe' : 'none'
                 }}>
                   {formatTranscriptForDisplay(currentText)}
                 </div>
