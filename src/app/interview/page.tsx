@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 
 async function startRealtimeSession() {
   const response = await fetch('/api/realtime-session', { method: 'POST' });
@@ -13,15 +13,35 @@ export default function InterviewPage() {
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [progress, setProgress] = useState(0); // 0-28 questions (23 main + 5 dream big)
-  const [transcripts, setTranscripts] = useState<Array<{text: string, timestamp: number, isComplete: boolean}>>([]);
+  const [progress, setProgress] = useState(0);
+  const [completedTexts, setCompletedTexts] = useState<string[]>([]);
   const [currentText, setCurrentText] = useState('');
-  const [pendingTranscript, setPendingTranscript] = useState(''); // Store complete transcript
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const sessionIdRef = useRef<string>(`session-${Date.now()}`);
+
+  const logTranscript = async (speaker: string, transcript: string) => {
+    try {
+      await fetch('/api/log-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          sessionId: sessionIdRef.current,
+          speaker,
+          transcript
+        })
+      });
+    } catch (error) {
+      console.error('Failed to log transcript:', error);
+    }
+  };
+
+  const formatTranscriptForDisplay = (text: string) => {
+    return text.replace(/\sblank\s/gi, ' __________ ');
+  };
 
   const startInterview = async () => {
     setIsConnecting(true);
@@ -30,66 +50,30 @@ export default function InterviewPage() {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
-        console.log('✅ AudioContext resumed');
       }
 
       const ephemeralKey = await startRealtimeSession();
-      console.log('Got ephemeral key:', ephemeralKey);
-      
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
-
-      pc.onconnectionstatechange = () => {
-        console.log('🔌 Connection state:', pc.connectionState);
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log('🧊 ICE connection state:', pc.iceConnectionState);
-      };
-
-      pc.onicegatheringstatechange = () => {
-        console.log('📡 ICE gathering state:', pc.iceGatheringState);
-      };
 
       const audioEl = audioRef.current;
       if (!audioEl) throw new Error('Audio element not found');
 
       pc.ontrack = async (e) => {
-        console.log('🎵 Audio track received!');
-        console.log('Track details:', {
-          kind: e.track.kind,
-          id: e.track.id,
-          label: e.track.label,
-          enabled: e.track.enabled,
-          muted: e.track.muted,
-          readyState: e.track.readyState
-        });
-        console.log('Streams:', e.streams);
-        
+        console.log('🎵 Audio track received');
         if (e.streams && e.streams[0]) {
           audioEl.srcObject = e.streams[0];
-          console.log('✅ Stream assigned to audio element');
-          
-          try {
-            await audioEl.play();
-            console.log('✅ Audio playback started successfully');
-          } catch (error) {
-            console.error('❌ Audio playback failed:', error);
-          }
-        } else {
-          console.error('❌ No streams in track event');
+          await audioEl.play();
         }
       };
 
       const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log('Got user media:', ms);
       pc.addTrack(ms.getTracks()[0]);
 
       const dc = pc.createDataChannel('oai-events');
       dcRef.current = dc;
 
       dc.addEventListener('open', () => {
-        console.log('Data channel opened');
         setIsActive(true);
         setIsConnecting(false);
 
@@ -137,67 +121,63 @@ Response scale:
 3 - Somewhat agree
 4 - Strongly agree
 
-Question 3. "I never seem to have enough time to get everything done on my job."
+Question 3. "I get a feeling of accomplishment from my work."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Question 4. "The work I do is meaningful to me."
+Question 4. "My job requires working very hard."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Question 5. "My work inspires me."
-Response scale:
-1 - Never
-2 - Almost never (a few times a year or less)
-3 - Rarely (once a month or less)
-4 - Sometimes (a few times a month)
-5 - Often (once a week)
-6 - Very often (a few times a week)
-7 - Always (every day)
-
-Organizational Support and the Work Environment (6 questions):
-
-Question 6. "At my organization, I am treated with respect."
+Question 5. "My job requires working very fast."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Question 7. "My organization is willing to extend resources in order to help me perform my job to the best of my ability."
+Social Support and Workplace Culture (6 questions):
+
+Question 6. "My supervisor is helpful in getting the job done."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Question 8. "My organization is committed to employee health and well-being."
+Question 7. "My coworkers are helpful in getting the job done."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
 
-Question 9. "Overall, how safe do you think your workplace is?"
-Response scale:
-1 - Very unsafe
-2 - Somewhat unsafe
-3 - Somewhat safe
-4 - Very safe
-
-Question 10. "Management reacts quickly to solve the problem when told about safety hazards."
+Question 8. "My job allows me to use my skills and abilities."
 Response scale:
 1 - Strongly disagree
 2 - Somewhat disagree
 3 - Somewhat agree
 4 - Strongly agree
-0 - Does not apply
+
+Question 9. "If I feel comfortable sharing my thoughts and opinions with coworkers."
+Response scale:
+1 - Strongly disagree
+2 - Somewhat disagree
+3 - Somewhat agree
+4 - Strongly agree
+
+Question 10. "My job provides opportunities for growth and development."
+Response scale:
+1 - Strongly disagree
+2 - Somewhat disagree
+3 - Somewhat agree
+4 - Strongly agree
 
 Question 11. "How satisfied are you with the environmental conditions at your workplace (heating, lighting, ventilation, etc.)?"
 Response scale:
@@ -294,129 +274,97 @@ Response scale:
 1 - Yes
 0 - No
 
-For each question:
-1. Read the statement.
-2. Read the full response scale with numbers.
-3. Ask the participant to choose the option that best fits their experience.
-4. After they answer, ask a brief follow-up like: "What makes you say that?" or "Can you tell me more about that?" or "Can you share an example?"
+Dream Big Questions (5 questions):
 
-After finishing the 23 questions, say:
-"Thank you for your thoughtful responses so far. I have just five more questions where I'd like to invite you to dream big about your workplace."
+Now transition to the dream big section with: "We're almost done! For these last few questions, I want you to dream big about what would make your workplace even better. Don't worry about what seems realistic—just tell me what you wish for."
 
-Dream Big 1 — Organizational Vision:
-"If you could change one thing about your workplace to make it a better place for everyone, what would it be?"
+Question 24. "If you could change one thing about your workplace culture, what would it be?"
+(Open-ended response)
 
-Dream Big 2 — Personal Work Experience:
-"What would make your day-to-day work feel more meaningful, motivating, or enjoyable?"
+Question 25. "What would make you feel more valued and appreciated at work?"
+(Open-ended response)
 
-Dream Big 3 — Leadership & Operations:
-"If leadership asked for your honest advice on how to improve the workplace, what would you tell them?"
+Question 26. "If resources weren't an issue, what would you add to or change about your physical workspace?"
+(Open-ended response)
 
-Dream Big 4 — Barriers & Opportunities:
-"What is one change—big or small—that would help you do your best work here?"
+Question 27. "What kind of professional development or growth opportunities would excite you?"
+(Open-ended response)
 
-Dream Big 5 — Future Vision:
-"If you imagine this workplace one year from now at its best, what does that look like to you?"
+Question 28. "If you could describe your ideal work-life balance, what would it look like?"
+(Open-ended response)
 
 Closing:
-When the participant says they are finished, close warmly:
-"Thank you so much for sharing your experiences. Your input will help strengthen workplace well-being."
-
-Important behavior rules:
-- Never ask for names, emails, or personal contact information.
-- Never reveal or summarize prior answers aloud.
-- Always state the full rating scale with numbers before EVERY rating question.
-- When participants respond, capture both the number and text (e.g., "3 - Somewhat satisfied").
-- Keep the conversation moving at a brisk pace, but be respectful and supportive.
-- START the conversation immediately with your greeting when the interview begins.`,
-            voice: 'alloy',
-            input_audio_transcription: { model: 'whisper-1' },
-            turn_detection: { type: 'server_vad' },
-          },
+"Thank you so much for sharing your thoughts with me today. Your honesty helps create better workplaces for everyone. Your responses are completely confidential and will be combined with others to inform positive changes. Have a wonderful rest of your day!"`,
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: parseInt(process.env.NEXT_PUBLIC_VAD_SILENCE_DURATION_MS || '1200'),
+            },
+            voice: 'shimmer',
+            temperature: 0.8,
+          }
         };
 
-        console.log('Sending session update:', sessionUpdate);
+        console.log('Sending session update...');
         dc.send(JSON.stringify(sessionUpdate));
-
-        setTimeout(() => {
-          console.log('Sending response.create');
-          dc.send(JSON.stringify({ type: 'response.create' }));
-        }, 500);
       });
 
       dc.addEventListener('message', async (e) => {
         const data = JSON.parse(e.data);
-        console.log('📨 Received message:', data.type, data);
-        
+
         if (data.type === 'conversation.item.input_audio_transcription.completed') {
           const transcript = data.transcript;
           console.log('👤 User said:', transcript);
           await logTranscript('user', transcript);
         }
         
-        // Real-time streaming text as Clarity speaks
         if (data.type === 'response.audio_transcript.delta') {
           const delta = data.delta;
           setCurrentText(prev => prev + delta);
         }
         
-        // When text transcription is complete, store it
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
-          console.log('🤖 Clarity said (transcript done):', transcript);
-          setPendingTranscript(transcript);
+          console.log('🤖 Clarity said:', transcript);
           await logTranscript('clarity', transcript);
           
-          // Track progress immediately when we see the question number
           if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
-            console.log('📊 Progress: Dream Big section (23/28)');
+            console.log('📊 Progress: Dream Big section');
             setProgress(prev => Math.max(prev, 23));
           } else {
-            // Look for "Question X" anywhere in the text
             const questionMatch = transcript.match(/Question (\d+)/i);
             if (questionMatch) {
               const questionNum = parseInt(questionMatch[1]);
               if (questionNum >= 1 && questionNum <= 23) {
-                console.log(`📊 Progress update: Question ${questionNum}/28`);
+                console.log(`📊 Progress: Question ${questionNum}/28`);
                 setProgress(questionNum);
               }
             }
           }
         }
         
-        // When audio finishes playing - MOVE TEXT TO GREY
         if (data.type === 'response.audio.done') {
-          console.log('🔊 AUDIO DONE - Moving text to grey');
-          const textToMove = pendingTranscript || currentText;
-          if (textToMove && textToMove.trim()) {
-            setTranscripts(prev => {
-              const newHistory = [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev];
-              console.log('✅ Text moved to grey history. Total items:', newHistory.length);
-              return newHistory;
-            });
-            setPendingTranscript('');
+          console.log('🔊 Audio complete - moving text to grey');
+          if (currentText.trim()) {
+            setCompletedTexts(prev => [currentText, ...prev]);
             setCurrentText('');
           }
         }
         
-        // Fallback on response.done
         if (data.type === 'response.done') {
-          console.log('✅ Response complete (fallback)');
+          console.log('✅ Response done (fallback)');
           setTimeout(() => {
-            const textToMove = pendingTranscript || currentText;
-            if (textToMove && textToMove.trim()) {
-              setTranscripts(prev => {
-                if (prev.length > 0 && prev[0].text === textToMove) {
-                  console.log('⚠️ Text already in history, skipping');
-                  return prev;
+            if (currentText.trim()) {
+              setCompletedTexts(prev => {
+                if (prev[0] !== currentText) {
+                  return [currentText, ...prev];
                 }
-                console.log('✅ Fallback: Moving text to grey');
-                return [{ text: textToMove, timestamp: Date.now(), isComplete: true }, ...prev];
+                return prev;
               });
-              setPendingTranscript('');
               setCurrentText('');
             }
-          }, 150);
+          }, 100);
         }
 
         if (data.type === 'error') {
@@ -430,57 +378,24 @@ Important behavior rules:
       const baseUrl = 'https://api.openai.com/v1/realtime';
       const model = 'gpt-4o-realtime-preview-2024-12-17';
 
-      console.log('Sending SDP offer to OpenAI...');
       const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
         method: 'POST',
         body: offer.sdp,
         headers: {
           Authorization: `Bearer ${ephemeralKey}`,
-          'Content-Type': 'application/sdp',
+          'Content-Type': 'application/sdp'
         },
       });
 
-      console.log('SDP response status:', sdpResponse.status);
       const answer = {
         type: 'answer' as RTCSdpType,
         sdp: await sdpResponse.text(),
       };
+
       await pc.setRemoteDescription(answer);
-      console.log('Remote description set successfully');
-
-      setTimeout(() => {
-        const receivers = pc.getReceivers();
-        console.log('📊 Active receivers:', receivers.length);
-        receivers.forEach((receiver, idx) => {
-          console.log(`Receiver ${idx}:`, {
-            track: receiver.track?.kind,
-            id: receiver.track?.id,
-            enabled: receiver.track?.enabled,
-            readyState: receiver.track?.readyState
-          });
-        });
-      }, 1000);
-
     } catch (error) {
       console.error('Error starting interview:', error);
       setIsConnecting(false);
-    }
-  };
-
-  const logTranscript = async (speaker: string, transcript: string) => {
-    try {
-      await fetch('/api/log-transcript', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timestamp: new Date().toISOString(),
-          sessionId: sessionIdRef.current,
-          speaker,
-          transcript,
-        }),
-      });
-    } catch (error) {
-      console.error('Failed to log transcript:', error);
     }
   };
 
@@ -489,12 +404,10 @@ Important behavior rules:
     if (!audioEl) return;
 
     if (isPaused) {
-      // Resume audio
       audioEl.muted = false;
       setIsPaused(false);
       console.log('▶ Audio resumed');
     } else {
-      // Pause audio by muting
       audioEl.muted = true;
       setIsPaused(true);
       console.log('⏸ Audio paused (muted)');
@@ -512,41 +425,32 @@ Important behavior rules:
       audioRef.current.srcObject = null;
     }
     setIsActive(false);
-    setTranscripts([]);
+    setCompletedTexts([]);
     setCurrentText('');
-    setPendingTranscript('');
     setProgress(0);
   };
 
   const progressPercentage = (progress / 28) * 100;
 
-  // Helper function to replace "blank" with underscores in display
-  const formatTranscriptForDisplay = (text: string) => {
-    return text.replace(/\sblank\s/gi, ' __________ ');
-  };
-
   return (
-    <div style={{ 
+    <div style={{
       minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       display: 'flex',
       flexDirection: 'column',
-      background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-      padding: '20px',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '40px 20px',
       position: 'relative'
     }}>
-      {/* Main Content */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingBottom: '120px'
-      }}>
+      <audio ref={audioRef} autoPlay />
+
+      {!isActive && !isConnecting && (
         <div style={{
           background: 'white',
-          borderRadius: '20px',
-          padding: '60px 40px',
-          maxWidth: '875px', // 75% wider than 500px
+          borderRadius: '30px',
+          padding: '60px 50px',
+          maxWidth: '875px',
           width: '100%',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           textAlign: 'center'
@@ -561,7 +465,7 @@ Important behavior rules:
           }}>
             Welcome to the Engaging Workplace<br />Well-Being Interview Experience!
           </h1>
-          
+
           <p style={{
             fontSize: '16px',
             color: '#666',
@@ -571,154 +475,170 @@ Important behavior rules:
             When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will not be shared with anyone in your workplace. They will instead be combined with others to support workplace improvement.
           </p>
 
-          {!isActive && !isConnecting && (
+          <button
+            onClick={startInterview}
+            style={{
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50px',
+              padding: '18px 60px',
+              fontSize: '18px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              boxShadow: '0 10px 30px rgba(59, 130, 246, 0.4)',
+              transition: 'all 0.3s ease',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 15px 40px rgba(59, 130, 246, 0.5)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 10px 30px rgba(59, 130, 246, 0.4)';
+            }}
+          >
+            Start Interview
+          </button>
+        </div>
+      )}
+
+      {isConnecting && (
+        <div style={{
+          background: 'white',
+          borderRadius: '30px',
+          padding: '60px 50px',
+          maxWidth: '500px',
+          textAlign: 'center',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            margin: '0 auto 30px',
+            borderRadius: '50%',
+            border: '4px solid #e0e7ff',
+            borderTopColor: '#3b82f6',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: '600',
+            color: '#1e40af',
+            marginBottom: '10px'
+          }}>
+            Connecting to Clarity...
+          </h2>
+          <p style={{ fontSize: '14px', color: '#666' }}>
+            Please allow microphone access
+          </p>
+        </div>
+      )}
+
+      {isActive && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: '875px',
+        }}>
+          <div style={{
+            width: '120px',
+            height: '120px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
+            boxShadow: '0 20px 60px rgba(59, 130, 246, 0.6)',
+            marginBottom: '40px',
+            animation: 'pulse 1.5s ease-in-out infinite'
+          }} />
+
+          <div style={{
+            background: 'white',
+            borderRadius: '20px',
+            padding: '30px 40px',
+            width: '100%',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+            marginBottom: '20px'
+          }}>
+            <div style={{
+              width: '100%',
+              height: '8px',
+              background: '#e5e7eb',
+              borderRadius: '10px',
+              overflow: 'hidden',
+              marginBottom: '15px'
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'linear-gradient(90deg, #3b82f6 0%, #1e40af 100%)',
+                width: `${progressPercentage}%`,
+                transition: 'width 0.5s ease',
+                borderRadius: '10px'
+              }} />
+            </div>
+
+            <p style={{
+              textAlign: 'center',
+              fontSize: '14px',
+              color: '#666',
+              fontWeight: '500'
+            }}>
+              Question {progress} of 28
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
             <button
-              onClick={startInterview}
+              onClick={togglePause}
               style={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-                color: 'white',
-                border: 'none',
+                background: 'white',
+                color: '#3b82f6',
+                border: '2px solid #3b82f6',
                 borderRadius: '50px',
-                padding: '18px 48px',
-                fontSize: '18px',
+                padding: '14px 40px',
+                fontSize: '16px',
                 fontWeight: '600',
                 cursor: 'pointer',
-                boxShadow: '0 10px 30px rgba(59, 130, 246, 0.4)',
                 transition: 'all 0.3s ease',
               }}
               onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 15px 40px rgba(59, 130, 246, 0.5)';
+                e.currentTarget.style.background = '#dbeafe';
               }}
               onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 10px 30px rgba(59, 130, 246, 0.4)';
+                e.currentTarget.style.background = 'white';
               }}
             >
-              Start Interview
+              {isPaused ? '▶ Resume' : '⏸ Pause'}
             </button>
-          )}
 
-          {isConnecting && (
-            <div style={{
-              fontSize: '18px',
-              color: '#3b82f6',
-              fontWeight: '600'
-            }}>
-              Connecting...
-            </div>
-          )}
-
-          {isActive && (
-            <div>
-              <div style={{
-                width: '120px',
-                height: '120px',
-                borderRadius: '50%',
-                background: isPaused ? '#999' : 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-                margin: '0 auto 30px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                animation: isPaused ? 'none' : 'pulse 1.5s ease-in-out infinite',
-              }}>
-                <div style={{
-                  width: '90px',
-                  height: '90px',
-                  borderRadius: '50%',
-                  background: 'white',
-                }} />
-              </div>
-              
-              {/* Progress Bar where "Interview in progress" was */}
-              <div style={{
-                marginBottom: '30px',
-                padding: '0 20px'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: '8px',
-                  fontSize: '14px',
-                  color: '#3b82f6',
-                  fontWeight: '600'
-                }}>
-                  <span>Progress</span>
-                  <span>{progress} / 28 Questions</span>
-                </div>
-                <div style={{
-                  width: '100%',
-                  height: '10px',
-                  background: '#e5e7eb',
-                  borderRadius: '5px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{
-                    width: `${progressPercentage}%`,
-                    height: '100%',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-                    transition: 'width 0.5s ease',
-                    borderRadius: '5px'
-                  }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                <button
-                  onClick={togglePause}
-                  style={{
-                    background: 'white',
-                    color: '#3b82f6',
-                    border: '2px solid #3b82f6',
-                    borderRadius: '50px',
-                    padding: '14px 40px',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#dbeafe';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'white';
-                  }}
-                >
-                  {isPaused ? '▶ Resume' : '⏸ Pause'}
-                </button>
-
-                <button
-                  onClick={stopInterview}
-                  style={{
-                    background: 'white',
-                    color: '#1e40af',
-                    border: '2px solid #1e40af',
-                    borderRadius: '50px',
-                    padding: '14px 40px',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#dbeafe';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'white';
-                  }}
-                >
-                  ⏹ Stop
-                </button>
-              </div>
-            </div>
-          )}
-
-          <audio ref={audioRef} autoPlay />
+            <button
+              onClick={stopInterview}
+              style={{
+                background: 'white',
+                color: '#1e40af',
+                border: '2px solid #1e40af',
+                borderRadius: '50px',
+                padding: '14px 40px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = '#dbeafe';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'white';
+              }}
+            >
+              ⏹ Stop
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Live Transcript Display - New text appears at top */}
-      {isActive && (currentText || transcripts.length > 0) && (
+      {isActive && (currentText || completedTexts.length > 0) && (
         <div style={{
           position: 'fixed',
           bottom: '20px',
@@ -733,9 +653,9 @@ Important behavior rules:
           padding: '20px 25px',
           boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
         }}>
-          {/* Current streaming text - blue and bold while streaming */}
           {currentText && (
             <div
+              className="animate-fade-in"
               style={{
                 color: '#3b82f6',
                 fontSize: '18px',
@@ -748,10 +668,10 @@ Important behavior rules:
             </div>
           )}
           
-          {/* Previous transcripts - all fade to grey progressively */}
-          {transcripts.map((item, idx) => (
+          {completedTexts.map((text, idx) => (
             <div
-              key={idx}
+              key={`completed-${idx}`}
+              className="animate-fade-in"
               style={{
                 color: '#999',
                 fontSize: '15px',
@@ -759,10 +679,9 @@ Important behavior rules:
                 marginBottom: '10px',
                 lineHeight: '1.5',
                 opacity: Math.max(0.4, 1 - (idx * 0.15)),
-                transition: 'all 0.3s ease'
               }}
             >
-              {formatTranscriptForDisplay(item.text)}
+              {formatTranscriptForDisplay(text)}
             </div>
           ))}
         </div>
@@ -788,6 +707,12 @@ Important behavior rules:
             opacity: 1;
             transform: translateY(0);
           }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>
