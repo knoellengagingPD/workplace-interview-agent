@@ -103,7 +103,7 @@ Core workflow:
 
 IMPORTANT: When recording responses, always include both the numeric value and the text label. For example, if someone says "Somewhat satisfied", record it as "3 - Somewhat satisfied".
 
-NOTE ON SCALES: Questions 12, 13, 17, 18, 19, and 21 have REVERSED scales (higher numbers = better outcomes) because they measure negative constructs. For these questions, lower numbers indicate worse conditions (more interference, stress, or distress).
+NOTE ON SCALES: Questions 12, 13, 17, 18, 19, and 21 have REVERSED scales (higher numbers = better outcomes) because they measure negative constructs.
 
 Work Demands and Rewards (5 questions):
 
@@ -252,7 +252,7 @@ Response scale:
 2 - More than half the days
 1 - Nearly every day
 
-Question 20. "In a typical week, how many days do you get at least 20 minutes of high intensity physical activity? High intensity activity lasts at least 10 minutes and increases your heart rate, makes you sweat, and may make you feel out of breath; examples are running, fast cycling, and strenuous, continuous lifting of heavy objects."
+Question 20. "In a typical week, how many days do you get at least 20 minutes of high intensity physical activity?"
 Response: Please answer with a number of days from 0 to 7.
 
 Discrimination, Harassment, and Violence (3 questions):
@@ -276,25 +276,20 @@ Response scale:
 
 Dream Big Questions (5 questions):
 
-Now transition to the dream big section with: "We're almost done! For these last few questions, I want you to dream big about what would make your workplace even better. Don't worry about what seems realistic—just tell me what you wish for."
+Now transition to the dream big section with: "We're almost done! For these last few questions, I want you to dream big about what would make your workplace even better."
 
 Question 24. "If you could change one thing about your workplace culture, what would it be?"
-(Open-ended response)
 
 Question 25. "What would make you feel more valued and appreciated at work?"
-(Open-ended response)
 
 Question 26. "If resources weren't an issue, what would you add to or change about your physical workspace?"
-(Open-ended response)
 
 Question 27. "What kind of professional development or growth opportunities would excite you?"
-(Open-ended response)
 
 Question 28. "If you could describe your ideal work-life balance, what would it look like?"
-(Open-ended response)
 
 Closing:
-"Thank you so much for sharing your thoughts with me today. Your honesty helps create better workplaces for everyone. Your responses are completely confidential and will be combined with others to inform positive changes. Have a wonderful rest of your day!"`,
+"Thank you so much for sharing your thoughts with me today. Your responses are completely confidential and will be combined with others to inform positive changes."`,
             turn_detection: {
               type: 'server_vad',
               threshold: 0.5,
@@ -306,7 +301,6 @@ Closing:
           }
         };
 
-        console.log('Sending session update...');
         dc.send(JSON.stringify(sessionUpdate));
       });
 
@@ -320,8 +314,7 @@ Closing:
         }
         
         if (data.type === 'response.audio_transcript.delta') {
-          const delta = data.delta;
-          setCurrentText(prev => prev + delta);
+          setCurrentText(prev => prev + data.delta);
         }
         
         if (data.type === 'response.audio_transcript.done') {
@@ -329,56 +322,41 @@ Closing:
           console.log('🤖 Clarity said:', transcript);
           await logTranscript('clarity', transcript);
           
-          if (transcript.includes('Dream Big') || transcript.includes('dream big')) {
-            console.log('📊 Progress: Dream Big section');
-            setProgress(prev => Math.max(prev, 23));
-          } else {
-            const questionMatch = transcript.match(/Question (\d+)/i);
-            if (questionMatch) {
-              const questionNum = parseInt(questionMatch[1]);
-              if (questionNum >= 1 && questionNum <= 23) {
-                console.log(`📊 Progress: Question ${questionNum}/28`);
-                setProgress(questionNum);
-              }
+          // Only track if transcript STARTS with "Question X"
+          const questionMatch = transcript.match(/^Question (\d+)\./i);
+          if (questionMatch) {
+            const questionNum = parseInt(questionMatch[1]);
+            if (questionNum >= 1 && questionNum <= 23) {
+              console.log(`📊 Progress: Question ${questionNum}/28`);
+              setProgress(questionNum);
             }
+          } else if (transcript.match(/dream big/i) && progress >= 23) {
+            console.log('📊 Progress: Dream Big section (24+)');
+            setProgress(24);
           }
         }
         
         if (data.type === 'response.audio.done') {
-          console.log('🔊 Audio complete - moving text to grey');
-          if (currentText.trim()) {
-            setCompletedTexts(prev => [currentText, ...prev]);
-            setCurrentText('');
-          }
+          console.log('🔊 Audio done - moving to grey');
+          setCompletedTexts(prev => currentText.trim() ? [currentText, ...prev] : prev);
+          setCurrentText('');
         }
         
         if (data.type === 'response.done') {
-          console.log('✅ Response done (fallback)');
+          console.log('✅ Response complete');
           setTimeout(() => {
-            if (currentText.trim()) {
-              setCompletedTexts(prev => {
-                if (prev[0] !== currentText) {
-                  return [currentText, ...prev];
-                }
-                return prev;
-              });
+            if (currentText.trim() && (completedTexts.length === 0 || completedTexts[0] !== currentText)) {
+              setCompletedTexts(prev => [currentText, ...prev]);
               setCurrentText('');
             }
           }, 100);
-        }
-
-        if (data.type === 'error') {
-          console.error('❌ Error from OpenAI:', data);
         }
       });
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const baseUrl = 'https://api.openai.com/v1/realtime';
-      const model = 'gpt-4o-realtime-preview-2024-12-17';
-
-      const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17`, {
         method: 'POST',
         body: offer.sdp,
         headers: {
@@ -387,12 +365,10 @@ Closing:
         },
       });
 
-      const answer = {
+      await pc.setRemoteDescription({
         type: 'answer' as RTCSdpType,
         sdp: await sdpResponse.text(),
-      };
-
-      await pc.setRemoteDescription(answer);
+      });
     } catch (error) {
       console.error('Error starting interview:', error);
       setIsConnecting(false);
@@ -402,28 +378,14 @@ Closing:
   const togglePause = () => {
     const audioEl = audioRef.current;
     if (!audioEl) return;
-
-    if (isPaused) {
-      audioEl.muted = false;
-      setIsPaused(false);
-      console.log('▶ Audio resumed');
-    } else {
-      audioEl.muted = true;
-      setIsPaused(true);
-      console.log('⏸ Audio paused (muted)');
-    }
+    audioEl.muted = !audioEl.muted;
+    setIsPaused(!isPaused);
   };
 
   const stopInterview = () => {
-    if (dcRef.current) {
-      dcRef.current.close();
-    }
-    if (pcRef.current) {
-      pcRef.current.close();
-    }
-    if (audioRef.current) {
-      audioRef.current.srcObject = null;
-    }
+    if (dcRef.current) dcRef.current.close();
+    if (pcRef.current) pcRef.current.close();
+    if (audioRef.current) audioRef.current.srcObject = null;
     setIsActive(false);
     setCompletedTexts([]);
     setCurrentText('');
@@ -437,11 +399,9 @@ Closing:
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       display: 'flex',
-      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '40px 20px',
-      position: 'relative'
     }}>
       <audio ref={audioRef} autoPlay />
 
@@ -450,7 +410,7 @@ Closing:
           background: 'white',
           borderRadius: '30px',
           padding: '60px 50px',
-          maxWidth: '875px',
+          maxWidth: '700px',
           width: '100%',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           textAlign: 'center'
@@ -463,7 +423,7 @@ Closing:
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}>
-            Welcome to the Engaging Workplace<br />Well-Being Interview Experience!
+            Welcome to the<br />Engaging Workplace<br />Well-Being Interview Experience!
           </h1>
 
           <p style={{
@@ -472,8 +432,17 @@ Closing:
             marginBottom: '40px',
             lineHeight: '1.6'
           }}>
-            When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will not be shared with anyone in your workplace. They will instead be combined with others to support workplace improvement.
+            When you start, Clarity will guide you through questions about job satisfaction, workload, workplace support, psychological safety, work-life balance, and overall well-being. Your responses are confidential and will be combined with others to support workplace improvement.
           </p>
+
+          <div style={{
+            width: '120px',
+            height: '120px',
+            margin: '0 auto 40px',
+            borderRadius: '50%',
+            border: '12px solid #5b8def',
+            boxShadow: '0 10px 30px rgba(91, 141, 239, 0.4)',
+          }} />
 
           <button
             onClick={startInterview}
@@ -537,37 +506,42 @@ Closing:
 
       {isActive && (
         <div style={{
+          background: 'white',
+          borderRadius: '30px',
+          padding: '50px 40px',
+          maxWidth: '800px',
+          width: '100%',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          width: '100%',
-          maxWidth: '875px',
+          minHeight: '500px',
+          position: 'relative'
         }}>
           <div style={{
-            width: '120px',
-            height: '120px',
+            width: '150px',
+            height: '150px',
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-            boxShadow: '0 20px 60px rgba(59, 130, 246, 0.6)',
+            border: '15px solid #5b8def',
+            boxShadow: '0 10px 30px rgba(91, 141, 239, 0.4)',
             marginBottom: '40px',
-            animation: 'pulse 1.5s ease-in-out infinite'
+            animation: 'pulse 2s ease-in-out infinite'
           }} />
 
           <div style={{
-            background: 'white',
-            borderRadius: '20px',
-            padding: '30px 40px',
             width: '100%',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-            marginBottom: '20px'
+            marginBottom: '25px'
           }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ fontSize: '14px', color: '#5b8def', fontWeight: '600' }}>Progress</span>
+              <span style={{ fontSize: '14px', color: '#5b8def', fontWeight: '600' }}>{progress} / 28 Questions</span>
+            </div>
             <div style={{
               width: '100%',
-              height: '8px',
+              height: '10px',
               background: '#e5e7eb',
               borderRadius: '10px',
               overflow: 'hidden',
-              marginBottom: '15px'
             }}>
               <div style={{
                 height: '100%',
@@ -577,24 +551,15 @@ Closing:
                 borderRadius: '10px'
               }} />
             </div>
-
-            <p style={{
-              textAlign: 'center',
-              fontSize: '14px',
-              color: '#666',
-              fontWeight: '500'
-            }}>
-              Question {progress} of 28
-            </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
             <button
               onClick={togglePause}
               style={{
                 background: 'white',
-                color: '#3b82f6',
-                border: '2px solid #3b82f6',
+                color: '#60a5fa',
+                border: '3px solid #60a5fa',
                 borderRadius: '50px',
                 padding: '14px 40px',
                 fontSize: '16px',
@@ -602,12 +567,8 @@ Closing:
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
               }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = '#dbeafe';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'white';
-              }}
+              onMouseOver={(e) => e.currentTarget.style.background = '#eff6ff'}
+              onMouseOut={(e) => e.currentTarget.style.background = 'white'}
             >
               {isPaused ? '▶ Resume' : '⏸ Pause'}
             </button>
@@ -617,7 +578,7 @@ Closing:
               style={{
                 background: 'white',
                 color: '#1e40af',
-                border: '2px solid #1e40af',
+                border: '3px solid #1e40af',
                 borderRadius: '50px',
                 padding: '14px 40px',
                 fontSize: '16px',
@@ -625,91 +586,59 @@ Closing:
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
               }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = '#dbeafe';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'white';
-              }}
+              onMouseOver={(e) => e.currentTarget.style.background = '#dbeafe'}
+              onMouseOut={(e) => e.currentTarget.style.background = 'white'}
             >
               ⏹ Stop
             </button>
           </div>
-        </div>
-      )}
 
-      {isActive && (currentText || completedTexts.length > 0) && (
-        <div style={{
-          position: 'fixed',
-          bottom: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '90%',
-          maxWidth: '1000px',
-          maxHeight: '180px',
-          overflowY: 'auto',
-          background: 'rgba(255, 255, 255, 0.95)',
-          borderRadius: '15px',
-          padding: '20px 25px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-        }}>
-          {currentText && (
-            <div
-              className="animate-fade-in"
-              style={{
-                color: '#3b82f6',
-                fontSize: '18px',
-                fontWeight: '600',
-                marginBottom: '12px',
-                lineHeight: '1.6'
-              }}
-            >
-              {formatTranscriptForDisplay(currentText)}
+          {(currentText || completedTexts.length > 0) && (
+            <div style={{
+              width: '100%',
+              maxHeight: '200px',
+              overflowY: 'auto',
+              background: '#eff6ff',
+              borderRadius: '15px',
+              padding: '20px',
+              boxShadow: 'inset 0 2px 10px rgba(59, 130, 246, 0.1)',
+            }}>
+              {currentText && (
+                <div style={{
+                  color: '#3b82f6',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  lineHeight: '1.6'
+                }}>
+                  {formatTranscriptForDisplay(currentText)}
+                </div>
+              )}
+              
+              {completedTexts.map((text, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    color: '#9ca3af',
+                    fontSize: '14px',
+                    fontWeight: '400',
+                    marginBottom: '8px',
+                    lineHeight: '1.5',
+                    opacity: Math.max(0.5, 1 - (idx * 0.15)),
+                  }}
+                >
+                  {formatTranscriptForDisplay(text)}
+                </div>
+              ))}
             </div>
           )}
-          
-          {completedTexts.map((text, idx) => (
-            <div
-              key={`completed-${idx}`}
-              className="animate-fade-in"
-              style={{
-                color: '#999',
-                fontSize: '15px',
-                fontWeight: '400',
-                marginBottom: '10px',
-                lineHeight: '1.5',
-                opacity: Math.max(0.4, 1 - (idx * 0.15)),
-              }}
-            >
-              {formatTranscriptForDisplay(text)}
-            </div>
-          ))}
         </div>
       )}
 
       <style jsx>{`
         @keyframes pulse {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.15);
-            opacity: 0.7;
-          }
-        }
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in {
-          animation: fadeIn 0.3s ease-out;
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.05); opacity: 0.9; }
         }
         @keyframes spin {
           to { transform: rotate(360deg); }
