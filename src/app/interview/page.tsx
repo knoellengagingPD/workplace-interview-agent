@@ -307,22 +307,26 @@ Closing:
       dc.addEventListener('message', async (e) => {
         const data = JSON.parse(e.data);
 
+        // User speaking
         if (data.type === 'conversation.item.input_audio_transcription.completed') {
           const transcript = data.transcript;
           console.log('👤 User said:', transcript);
           await logTranscript('user', transcript);
         }
         
+        // Clarity speaking - build up text character by character
         if (data.type === 'response.audio_transcript.delta') {
           setCurrentText(prev => prev + data.delta);
+          console.log('📝 Building text:', data.delta);
         }
         
+        // Text is complete but audio still playing - just log and track progress
         if (data.type === 'response.audio_transcript.done') {
           const transcript = data.transcript;
-          console.log('🤖 Clarity said:', transcript);
+          console.log('✅ Text complete (audio still playing):', transcript);
           await logTranscript('clarity', transcript);
           
-          // Only track if transcript STARTS with "Question X"
+          // Track progress - only if transcript STARTS with "Question X"
           const questionMatch = transcript.match(/^Question (\d+)\./i);
           if (questionMatch) {
             const questionNum = parseInt(questionMatch[1]);
@@ -336,20 +340,33 @@ Closing:
           }
         }
         
+        // AUDIO DONE - NOW move text from blue to grey
         if (data.type === 'response.audio.done') {
-          console.log('🔊 Audio done - moving to grey');
-          setCompletedTexts(prev => currentText.trim() ? [currentText, ...prev] : prev);
-          setCurrentText('');
+          console.log('🔊 AUDIO COMPLETE - Moving blue text to grey');
+          setCompletedTexts(prev => {
+            // Only add if there's actual text
+            if (currentText.trim()) {
+              console.log('Moving to grey:', currentText);
+              return [currentText, ...prev];
+            }
+            return prev;
+          });
+          setCurrentText(''); // Clear blue text
         }
         
+        // Fallback safety
         if (data.type === 'response.done') {
-          console.log('✅ Response complete');
+          console.log('⚠️ Response done fallback triggered');
           setTimeout(() => {
-            if (currentText.trim() && (completedTexts.length === 0 || completedTexts[0] !== currentText)) {
-              setCompletedTexts(prev => [currentText, ...prev]);
-              setCurrentText('');
-            }
-          }, 100);
+            setCompletedTexts(prev => {
+              if (currentText.trim() && (prev.length === 0 || prev[0] !== currentText)) {
+                console.log('Fallback: Moving to grey:', currentText);
+                return [currentText, ...prev];
+              }
+              return prev;
+            });
+            setCurrentText('');
+          }, 200);
         }
       });
 
@@ -603,18 +620,22 @@ Closing:
               padding: '20px',
               boxShadow: 'inset 0 2px 10px rgba(59, 130, 246, 0.1)',
             }}>
+              {/* BLUE TEXT - Currently speaking */}
               {currentText && (
                 <div style={{
                   color: '#3b82f6',
                   fontSize: '16px',
                   fontWeight: '600',
-                  marginBottom: '12px',
-                  lineHeight: '1.6'
+                  marginBottom: '15px',
+                  lineHeight: '1.6',
+                  paddingBottom: '15px',
+                  borderBottom: completedTexts.length > 0 ? '2px solid #dbeafe' : 'none'
                 }}>
                   {formatTranscriptForDisplay(currentText)}
                 </div>
               )}
               
+              {/* GREY TEXT - Completed */}
               {completedTexts.map((text, idx) => (
                 <div
                   key={idx}
@@ -622,7 +643,7 @@ Closing:
                     color: '#9ca3af',
                     fontSize: '14px',
                     fontWeight: '400',
-                    marginBottom: '8px',
+                    marginBottom: '10px',
                     lineHeight: '1.5',
                     opacity: Math.max(0.5, 1 - (idx * 0.15)),
                   }}
