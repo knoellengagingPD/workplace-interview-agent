@@ -1,82 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BigQuery } from '@google-cloud/bigquery';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json();
-    const { timestamp, sessionId, speaker, transcript } = body;
-    
-    console.log('📝 Logging transcript directly to BigQuery:', { 
-      timestamp, 
-      sessionId, 
-      speaker,
-      transcriptLength: transcript?.length 
+    const body = await request.json();
+    console.log('Received log request:', body);
+
+    // Get Cloud Run configuration
+    const cloudRunUrl = process.env.NEXT_PUBLIC_CLOUD_RUN_LOGGER_URL;
+    const apiKey = process.env.CLOUD_RUN_API_KEY;
+
+    console.log('Cloud Run config:', {
+      hasUrl: !!cloudRunUrl,
+      hasKey: !!apiKey,
+      url: cloudRunUrl
     });
-    
-    // Validate required fields
-    if (!timestamp || !sessionId || !speaker || !transcript) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
 
-    // Get BigQuery configuration from environment variables
-    const projectId = process.env.GCP_PROJECT_ID;
-    const datasetId = process.env.BQ_DATASET_ID;
-    const tableId = process.env.BQ_TABLE_ID;
-
-    if (!projectId || !datasetId || !tableId) {
-      console.error('❌ Missing BigQuery configuration:', {
-        hasProject: !!projectId,
-        hasDataset: !!datasetId,
-        hasTable: !!tableId
-      });
+    if (!cloudRunUrl || !apiKey) {
+      console.error('❌ Missing Cloud Run configuration');
       return NextResponse.json(
-        { error: 'BigQuery not configured' },
+        { error: 'Cloud Run configuration missing' },
         { status: 500 }
       );
     }
 
-    // Initialize BigQuery client
-    const bigquery = new BigQuery({
-      projectId: projectId,
-      credentials: {
-        client_email: process.env.GCP_CLIENT_EMAIL,
-        private_key: process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    // Forward to Cloud Run
+    console.log('Sending to Cloud Run...');
+    const response = await fetch(cloudRunUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
       },
+      body: JSON.stringify(body),
     });
 
-    // Insert row into BigQuery
-    const rows = [{
-      timestamp,
-      session_id: sessionId,
-      speaker,
-      transcript,
-    }];
+    console.log('Cloud Run response status:', response.status);
 
-    console.log('🚀 Inserting into BigQuery:', `${projectId}.${datasetId}.${tableId}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Cloud Run error:', errorText);
+      return NextResponse.json(
+        { error: 'Cloud Run request failed', details: errorText },
+        { status: response.status }
+      );
+    }
 
-    await bigquery
-      .dataset(datasetId)
-      .table(tableId)
-      .insert(rows);
+    const result = await response.json();
+    console.log('✅ Cloud Run success:', result);
 
-    console.log('✅ Successfully logged to BigQuery');
-    
-    return NextResponse.json({ 
-      success: true,
-      inserted: 1
-    });
-    
-  } catch (error: any) {
-    console.error('❌ BigQuery logging error:', error);
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('❌ Error in log-transcript:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to log transcript',
-        message: error instanceof Error ? error.message : 'Unknown error',
-        details: error.errors || []
-      },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
